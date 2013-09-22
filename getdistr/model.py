@@ -64,7 +64,7 @@ class Weight(object):
         raise NotImplementedError
 
 
-class GeneralModel(object):
+class NormalModel(object):
     def __init__(self, mu, sigma, r, s=None):
         self.mu = mu
         self.sigma = sigma
@@ -80,12 +80,8 @@ class GeneralModel(object):
 
         for y in range(2 * (self.r - self.s), self.mu + 6 * self.sigma - z): # iterate over possible observation span
             weight = w(y, self.r, a, b, self.s)
-
-            #norm_const = sum([weight * stats.norm.pdf(t + y, self.mu, self.sigma) for t in range(-(self.mu + 5 * self.sigma), self.mu + 5 * self.sigma) ])
             w_times_f = weight * stats.norm.pdf(z + y, self.mu, self.sigma)
             E_x_given_z += (y + z) * w_times_f / norm_const
-            #print y, E_x_given_z, norm_const, w_times_f, (y + z)
-        #sum([w(o, self.r, self.s) * stats.norm.pdf(o, mu, sigma) for o in  ])
         return(E_x_given_z)
 
     def expected_variance(self):
@@ -97,12 +93,22 @@ class GeneralModel(object):
     def infer_variance(self):
         raise NotImplementedError
 
-class NormalModel(object):
-    def __init__(self, o, r, a, b=None, s=None):
-        self.o = o
+class GeneralModel(object):
+    def __init__(self, histogram, r, s=None):
+        self.histogram = histogram
         self.r = r
-        self.a = a
-        self.b = b
         self.s = s if s != None else r / 2
-        return()
+
+    def expected_mean(self, z, a, b=None):
+        E_x_given_z = 0
+        norm_const = 0
+        for t in range(z + 2 * (self.r - self.s), self.mu + 6 * self.sigma): #iterate over possible fragment sizes  
+            norm_const += w(t - z , self.r, a, b, self.s) * self.histogram() #stats.norm.pdf(t  , self.mu, self.sigma)
+
+        for y in range(2 * (self.r - self.s), self.mu + 6 * self.sigma - z): # iterate over possible observation span
+            weight = w(y, self.r, a, b, self.s)
+
+            w_times_f = weight * self.histogram() # stats.norm.pdf(z + y, self.mu, self.sigma)
+            E_x_given_z += (y + z) * w_times_f / norm_const
+        return(E_x_given_z)
 
