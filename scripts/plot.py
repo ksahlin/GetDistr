@@ -6,7 +6,7 @@ Created on Sep 18, 2013
 
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
-from matplotlib.ticker import LinearLocator, FormatStrFormatter
+from matplotlib.ticker import LinearLocator, FormatStrFormatter, FixedLocator
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -16,10 +16,13 @@ import argparse
 import model
 
 
-
+#TODO: Split up fcns: data_readin() to get vectors plot() and plot3d() for plotting.
 #frag_obj =model.NormalModel(500, 20, 100, 50)
 #frag_obj.expected_mean(0,10000,10000)
-def plot(args):
+
+
+
+def plot_mean_frag(args):
     """
     Demo of the legend function with a few features.
     
@@ -33,33 +36,26 @@ def plot(args):
     """
 
 
-    # Example data
+    # Generating data
 
     std_dev = []
     for sigma in args.sigma:
         fragm_dist_object = model.NormalModel(args.mean, sigma, args.readlen, args.softclipped)
         gap_data_points = []
         for gap in args.gaps:
-            print gap, args.reflen
-            print fragm_dist_object.expected_mean(gap, args.reflen, args.reflen)
+            #print gap, args.reflen, sigma
+            #print fragm_dist_object.expected_mean(gap, args.reflen, args.reflen)
             gap_data_points.append(fragm_dist_object.expected_mean(gap, args.reflen, args.reflen))
         std_dev.append(gap_data_points)
-
-
-    a = np.arange(0, 3, .02)
-    #b = np.arange(0, 3, .02)
-    c = np.exp(a)
-    d = c[::-1]
 
     # Create plots with pre-defined labels.
     # Alternatively, you can pass labels explicitly when calling `legend`.
     fig, ax = plt.subplots()
-    for sigma in args.sigma:
-        #TODO: Need a way to pick 'k--' (line style automatically but different)
-        ax.plot(a, c, 'k--', label='std dev = {0}'.format(sigma))
-    ax.plot(a, c, 'k--', label='std dev = 50')
-    ax.plot(a, d, 'k:', label='std dev = 100')
-    ax.plot(a, c + d, 'k', label='std dev = 150')
+    lines_ = ["k-", "k--", "k-.", "k:"]
+    for i, sigma in enumerate(args.sigma):
+        line = lines_[i]
+        ax.plot(args.gaps, std_dev[i], line, label='$\sigma = {0}$'.format(sigma))
+
 
     # Now add the legend with some customizations.
     legend = ax.legend(loc='upper left', shadow=True)
@@ -74,28 +70,103 @@ def plot(args):
 
     for label in legend.get_lines():
         label.set_linewidth(1.5)  # the legend line width
-    plt.show()
 
-def plot3d(args):
+    ax.set_xlabel('$z$', fontsize=24)
+    ax.set_ylabel('$x$', fontsize=24)
+
+    plt.savefig(args.outfile)
+
+def plot_stddev_frag(args):
+
+
+    # Example data
+
+    std_dev = []
+    for sigma in args.sigma:
+        fragm_dist_object = model.NormalModel(args.mean, sigma, args.readlen, args.softclipped)
+        gap_data_points = []
+        for gap in args.gaps:
+            print gap, args.reflen, sigma
+            print fragm_dist_object.expected_standard_deviation(gap, args.reflen, args.reflen)
+            gap_data_points.append(fragm_dist_object.expected_standard_deviation(gap, args.reflen, args.reflen))
+        std_dev.append(gap_data_points)
+
+    # Create plots with pre-defined labels.
+    # Alternatively, you can pass labels explicitly when calling `legend`.
+    fig, ax = plt.subplots()
+    lines_ = ["k-", "k--", "k-.", "k:"]
+    for i, sigma in enumerate(args.sigma):
+        line = lines_[i]
+        ax.plot(args.gaps, std_dev[i], line, label='$\sigma = {0}$'.format(sigma))
+
+
+    # Now add the legend with some customizations.
+    legend = ax.legend(loc='upper left', shadow=True)
+
+    # The frame is matplotlib.patches.Rectangle instance surrounding the legend.
+    frame = legend.get_frame()
+    frame.set_facecolor('0.90')
+
+    # Set the fontsize
+    for label in legend.get_texts():
+        label.set_fontsize('large')
+
+    for label in legend.get_lines():
+        label.set_linewidth(1.5)  # the legend line width
+
+    ax.set_xlabel('$z$', fontsize=24)
+    ax.set_ylabel('$\sigma_{x|z}$', fontsize=24)
+
+    plt.savefig(args.outfile)
+
+
+def plot3d_mean_frag(args):
     fig = plt.figure()
     ax = fig.gca(projection='3d')
-    X = np.arange(-5, 5, 0.25)
-    Y = np.arange(-5, 5, 0.25)
-    X, Y = np.meshgrid(X, Y)
-    R = np.sqrt(X ** 2 + Y ** 2)
-    Z = np.sin(R)
-    surf = ax.plot_surface(X, Y, Z, rstride=1, cstride=1, cmap=cm.coolwarm,
-            linewidth=0, antialiased=False)
-    ax.set_zlim(-1.01, 1.01)
+#    X = np.arange(-5, 5, 0.25)
+#    Y = np.arange(-5, 5, 0.25)
+#    X, Y = np.meshgrid(X, Y)
 
-    ax.zaxis.set_major_locator(LinearLocator(10))
-    ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
+
+    X = np.array(args.gaps)
+    Y = np.array(args.sigma)
+    X, Y = np.meshgrid(X, Y)
+    std_dev = []
+    for sigma in args.sigma:
+        fragm_dist_object = model.NormalModel(args.mean, sigma, args.readlen, args.softclipped)
+        given_sigma = []
+        for gap in args.gaps:
+            given_sigma.append(fragm_dist_object.expected_mean(gap, args.reflen, args.reflen))
+        std_dev.append(given_sigma)
+    Z = np.array(std_dev)
+
+#    R = np.sqrt(X ** 2 + Y ** 2)
+#    Z = np.sin(R)
+#
+#    for i in range(len(X)):
+#        Z[i] = (X[i] + Y[i])
+#    print X, len(X)
+#    print Y, len(Y)
+#    print Z, len(Z)
+    surf = ax.plot_surface(X, Y, Z, rstride=1, cstride=1, cmap=cm.gray, linewidth=0, antialiased=False)
+    #cmap=cm.coolwarm
+    ax.set_zlim(np.amin(Z) - 0.01, np.amax(Z) + 0.01)
+    z_range = range(args.mean, int(np.amax(Z)) + 50, 50)
+    ax.zaxis.set_major_locator(FixedLocator(z_range))
+    ax.zaxis.set_major_formatter(FormatStrFormatter('%.0f'))
+    ax.w_xaxis.set_major_locator(FixedLocator(args.gaps))
+    ax.w_yaxis.set_major_locator(FixedLocator(args.sigma))
+    #ax.xticks(args.gaps)
+    #ax.yticks(args.sigma)
 
     fig.colorbar(surf, shrink=0.5, aspect=5)
 
-    plt.show()
 
+    ax.set_xlabel('$z$', fontsize=24)
+    ax.set_ylabel('$\sigma$', fontsize=24)
+    ax.set_zlabel('$x$', fontsize=24)
 
+    plt.savefig(args.outfile)
 
 if __name__ == '__main__':
 
@@ -120,10 +191,17 @@ if __name__ == '__main__':
     parser.add_argument("-o", dest="outfile", type=str, required=True,
                   help="outfile destination.")
 
+    parser.add_argument("--3D", dest='threedim', action="store_true",
+                  help="Plots a 3D plot with gaps,std_dev and function value as X,Y,Z")
 
+    parser.add_argument("--std", dest='std', action="store_true",
+                  help="Plots the expected standard deviation of fragment sizes over a gap.\
+                   If --std is not specified, the mean fragment length is plotted (default = mean length)")
 
     args = parser.parse_args()
-    if len(args.sigma) > 1:
-        plot3d(args)
+    if args.threedim:
+        plot3d_mean_frag(args)
+    elif args.std:
+        plot_stddev_frag(args)
     else:
-        plot(args)
+        plot_mean_frag(args)

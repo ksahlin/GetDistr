@@ -73,19 +73,30 @@ class NormalModel(object):
 
     def expected_mean(self, z, a, b=None):
         E_x_given_z = 0
-
         norm_const = 0
         for t in range(z + 2 * (self.r - self.s), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
-            norm_const += w(t - z , self.r, a, b, self.s) * stats.norm.pdf(t  , self.mu, self.sigma)
+            norm_const += w(t - z , self.r, a, b, self.s) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
 
         for y in range(2 * (self.r - self.s), self.mu + 6 * self.sigma - z): # iterate over possible observation span
-            weight = w(y, self.r, a, b, self.s)
-            w_times_f = weight * stats.norm.pdf(z + y, self.mu, self.sigma)
+            weight = w(y , self.r, a, b, self.s)
+            w_times_f = weight * stats.norm.pdf(z + y + 0.5, self.mu, self.sigma) # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
             E_x_given_z += (y + z) * w_times_f / norm_const
         return(E_x_given_z)
 
-    def expected_variance(self):
-        raise NotImplementedError
+    def expected_standard_deviation(self, z, a, b=None):
+        E_x_given_z = self.expected_mean(z, a, b)
+        E_x_square_given_z = 0
+        norm_const = 0
+        for t in range(z + 2 * (self.r - self.s), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
+            norm_const += w(t - z , self.r, a, b, self.s) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
+
+        for y in range(2 * (self.r - self.s), self.mu + 6 * self.sigma - z): # iterate over possible observation span
+            weight = w(y , self.r, a, b, self.s)
+            w_times_f = weight * stats.norm.pdf(z + y + 0.5, self.mu, self.sigma) # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
+            E_x_square_given_z += (y + z) ** 2 * w_times_f / norm_const
+
+        Var_x_given_z = (E_x_square_given_z - E_x_given_z ** 2) ** 0.5
+        return(Var_x_given_z)
 
     def infer_mean(self):
         raise NotImplementedError
