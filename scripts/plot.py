@@ -72,9 +72,9 @@ def plot_mean_frag(args):
         label.set_linewidth(1.5)  # the legend line width
 
     ax.set_xlabel('$z$', fontsize=24)
-    ax.set_ylabel('$x$', fontsize=24)
+    ax.set_ylabel('$E[X]$', fontsize=24)
 
-    plt.savefig(args.outfile)
+    plt.savefig(args.outfile, format='eps')
 
 def plot_stddev_frag(args):
 
@@ -117,7 +117,7 @@ def plot_stddev_frag(args):
     ax.set_xlabel('$z$', fontsize=24)
     ax.set_ylabel('$\sigma_{x|z}$', fontsize=24)
 
-    plt.savefig(args.outfile)
+    plt.savefig(args.outfile, format='eps')
 
 
 def plot3d_mean_frag(args):
@@ -159,14 +159,14 @@ def plot3d_mean_frag(args):
     #ax.xticks(args.gaps)
     #ax.yticks(args.sigma)
 
-    fig.colorbar(surf, shrink=0.5, aspect=5)
+    #fig.colorbar(surf, shrink=0.5, aspect=5)
 
 
     ax.set_xlabel('$z$', fontsize=24)
     ax.set_ylabel('$\sigma$', fontsize=24)
-    ax.set_zlabel('$x$', fontsize=24)
+    ax.set_zlabel('$E[X]$', fontsize=24)
 
-    plt.savefig(args.outfile)
+    plt.savefig(args.outfile, format='eps')
 
 if __name__ == '__main__':
 
