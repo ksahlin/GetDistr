@@ -30,18 +30,19 @@ def w(o, r, a, b=None, s=None):
 
     return(min(w_fcn))
 
-def estimate_library_mean(list_of_obs, r, a, s=None):
+def estimate_library_mean(list_of_obs, r, a, soft=None):
     sample_obs_sum = 0
     number_of_obs_sum = 0
     for o in list_of_obs:
-        weight = float(w(o, r, a))
+        weight = float(w(o, r, a, s=soft))
         sample_obs_sum += o / weight
         number_of_obs_sum += 1 / weight
 
     print sample_obs_sum / number_of_obs_sum
     return(sample_obs_sum / number_of_obs_sum)
 
-
+def estimate_library_stddev(list_of_obs, r, a, soft=None):
+    raise NotImplementedError
 
 
 
@@ -142,13 +143,13 @@ class NormalModel(object):
             for o in list_of_obs:
                 weight = w(o , self.r, a, b, self.s)
                 lib_dist = stats.norm.pdf(o + z + 0.5, self.mu, self.sigma)
-                print z, weight, lib_dist, norm_const
+                #print z, weight, lib_dist, norm_const
                 log_p_x_given_z += log(weight) + log(lib_dist) - log(norm_const)
 
             likelihood_curve.append((z, log_p_x_given_z))
 
         ml_gap = max(likelihood_curve, key=lambda x: x[1])
-        print likelihood_curve, ml_gap
+        #print likelihood_curve, ml_gap
         avg_obs = sum(list_of_obs) / len(list_of_obs)  # avg_obs is an integer (rounded to an even bp)
         print avg_obs + ml_gap[0]
         return(avg_obs + ml_gap[0])
