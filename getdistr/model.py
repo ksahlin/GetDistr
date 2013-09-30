@@ -18,9 +18,22 @@ def normpdf(x, mu, sigma):
     y = float(str((1 / Decimal(str((math.sqrt(2 * math.pi) * abs(sigma))))) * Decimal(str(-u * u / 2)).exp()))
     return y
 
-def w(o, r, a, b=None, s=None):
-    s = s if s != None else r / 2
+def w(o, r, a, b=None, s=None, infer_lib_mean=False):
     w_fcn = []
+    ##
+    # Weight function in the case where we want to estimate the original library mean
+    # (full original distribution) from alignments of paired reads onto a contig
+    if infer_lib_mean:
+        return(max(a - (o - 2 * s) + 1, 0))
+
+
+    ##
+    # Weight function in the case where we want to calculate expected or inferred mean of
+    # observations coming from our library with truncation and skewness 
+    # (e.g. over insertions or scaffold gaps).
+
+    s = s if s != None else r / 2  # if softclipped is not set softclipped to half of read length
+
     w_fcn.append(max(o - 2 * (r - s) + 1, 0))
     if b:
         w_fcn.append(max(a + b - (o - 2 * s) + 1, 0))
@@ -34,10 +47,9 @@ def estimate_library_mean(list_of_obs, r, a, soft=None):
     sample_obs_sum = 0
     number_of_obs_sum = 0
     for o in list_of_obs:
-        weight = float(w(o, r, a, s=soft))
+        weight = float(w(o, r, a, s=soft, infer_lib_mean=True))
         sample_obs_sum += o / weight
         number_of_obs_sum += 1 / weight
-
     print sample_obs_sum / number_of_obs_sum
     return(sample_obs_sum / number_of_obs_sum)
 
