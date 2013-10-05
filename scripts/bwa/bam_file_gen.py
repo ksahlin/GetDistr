@@ -28,8 +28,8 @@ def get_reference(length):
     return(ref)
 
 
-def get_contig(ref, c_len):
-    return(ref[ len(ref) / 2 - c_len / 2 : len(ref) / 2 + c_len / 2])
+def get_contig(ref, cont_len):
+    return(ref[ len(ref) / 2 - cont_len / 2 : len(ref) / 2 + cont_len / 2])
 
 
 def map_mem(pe1_path, pe2_path, contig_path, args, threads=8):
@@ -49,7 +49,7 @@ def map_mem(pe1_path, pe2_path, contig_path, args, threads=8):
                               stderr=std_err)
 
 
-    sam_to_bam(bwa_output, os.path.join(args.outpath, str(args.c_len) + '-' + str(args.std_dev)) + ".bam")
+    sam_to_bam(bwa_output, os.path.join(args.outpath, str(args.cont_len) + '-' + str(args.lib_std)) + ".bam")
     #pysam.sort(bwa_output + ".bam", output_path)
     #pysam.index(output_path + '.bam')
 
@@ -77,7 +77,8 @@ def map_sampe(pe1_path, pe2_path, genome_path, args):
                                 pe1_output, pe2_output,
                                 pe1_path, pe2_path ], stdout=bwa_file, stderr=std_err)
 
-    sam_to_bam(bwa_output, os.path.join(args.outpath, str(args.c_len) + '-' + str(args.std_dev)) + ".bam")
+    sam_to_bam(bwa_output, os.path.join(args.outpath, str(args.cont_len) + '-' + str(args.lib_std)) + ".bam")
+    return(os.path.join(args.outpath, str(args.cont_len) + '-' + str(args.lib_std)) + ".bam")
     #pysam.sort(bwa_output + ".bam", output_path)
     #pysam.index(output_path + '.bam')
 
@@ -87,7 +88,7 @@ def map_sampe(pe1_path, pe2_path, genome_path, args):
 def main(args):
 
     ref = get_reference(args.genomelen)
-    contig = get_contig(ref, args.c_len)
+    contig = get_contig(ref, args.cont_len)
 
     # ref file
     ref_path = '/tmp/ref.fa'
@@ -103,11 +104,11 @@ def main(args):
 
 
 
-    simulate.pe_reads_haploid(args.outpath, args.mean, args.coverage, args.std_dev, args.read_length, ref_path)
+    simulate.pe_reads_haploid(args.outpath, args.lib_mean, args.coverage, args.lib_std, args.read_length, ref_path)
 
     #map_mem(os.path.join(args.outpath, 'PE_1'), os.path.join(args.outpath, 'PE_2'), c_path, args)
-    map_sampe(os.path.join(args.outpath, 'PE_1'), os.path.join(args.outpath, 'PE_2'), c_path, args)
-
+    bam_path = map_sampe(os.path.join(args.outpath, 'PE_1'), os.path.join(args.outpath, 'PE_2'), c_path, args)
+    return(bam_path)
 
 
 if __name__ == '__main__':
