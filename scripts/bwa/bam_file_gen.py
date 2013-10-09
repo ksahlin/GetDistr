@@ -75,7 +75,10 @@ def map_sampe(pe1_path, pe2_path, genome_path, args):
         subprocess.check_call([ "bwa", "sampe",
                                 genome_db,
                                 pe1_output, pe2_output,
-                                pe1_path, pe2_path ], stdout=bwa_file, stderr=std_err)
+                                pe1_path, pe2_path], stdout=bwa_file, stderr=std_err)
+
+
+
 
     sam_to_bam(bwa_output, os.path.join(args.outpath, str(args.cont_len) + '-' + str(args.lib_std)) + ".bam")
     return(os.path.join(args.outpath, str(args.cont_len) + '-' + str(args.lib_std)) + ".bam")

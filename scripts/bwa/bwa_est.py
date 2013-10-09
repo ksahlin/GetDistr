@@ -9,6 +9,7 @@ import os
 
 import argparse
 import pysam
+import subprocess
 
 import model
 import bam_file_gen
@@ -45,26 +46,39 @@ def get_bwa_results(bwa_file):
 def get_getdistr_results(bam_path, args):
 
     list_of_obs = []
-
+    list_of_isize = []
     with pysam.Samfile(bam_path, 'rb') as bam_file:
         for alignedread in bam_file:
             if alignedread.is_read1 and not alignedread.is_unmapped and not alignedread.mate_is_unmapped :  # only count an observation from a read pair once 
                 list_of_obs.append(alignedread.tlen)
+                #if len(alignedread.cigar) > 1:
+                print alignedread.cigarstring
 
-    mean_est = model.estimate_library_mean(list_of_obs, 100, args.genomelen, soft=80)
+    # Put allowed soft clips to 0, because BWA does not align outside boundaries of the reference.
+    # i.e. reeds need to be fully contained (mapped) to the contig in this case.
+    mean_est = model.estimate_library_mean(list_of_obs, 100, args.cont_len, soft=0)
     mean_naive = sum(list_of_obs) / float(len(list_of_obs))
-    print(mean_est, mean_naive)
+    print(mean_est, mean_naive, len(list_of_obs))
+    print list_of_obs
 
 
 def main(args):
     for in_values in read_input(open(args.sim_file, 'r')):
-        args_object = Args(in_values, args.outpath, args.genomelen)
-        print 'Processing experiment: ', in_values
-        bam_path = create_bam(args_object)
-        get_bwa_results(os.path.join(args.outpath, 'bwa_out'))
-        print bam_path
-        get_getdistr_results(bam_path, args_object)
-        print_output()
+        successful_experiments = 1
+        while successful_experiments <= args.experiments: # for exp in xrange(args.experiments):
+            args_object = Args(in_values, args.outpath, args.genomelen)
+            print 'Processing experiment ' + str(successful_experiments)
+            print 'With setting: ', in_values
+            try:
+                bam_path = create_bam(args_object)
+            except subprocess.CalledProcessError:
+                continue
+            get_bwa_results(os.path.join(args.outpath, 'bwa_out'))
+            print bam_path
+            get_getdistr_results(bam_path, args_object)
+            print_output()
+            successful_experiments += 1
+
 
 if __name__ == '__main__':
     ##
@@ -77,6 +91,7 @@ if __name__ == '__main__':
     #parser.add_argument('read_length', type=int, help='Length of read fragments within a pair. ')
     #parser.add_argument('coverage', type=int, help='Coverage for read library. ')
     parser.add_argument('outpath', type=str, help='Path to output location. ')
+    parser.add_argument('experiments', type=int, help='Number of experiment for each line in sim_in.txt file to run. ')
     parser.add_argument('genomelen', type=int, help='Length of the reference sequence. ')
     #parser.add_argument('c_len', type=int, help='Contig length. ')
 

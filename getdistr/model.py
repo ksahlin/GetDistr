@@ -139,10 +139,11 @@ class NormalModel(object):
             @ argument precision ... 
         '''
 
+        print self.s, self.r, a, sum(list_of_obs) / len(list_of_obs)
         likelihood_curve = []
         for z in range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s)), precision):
             ##
-            # claculate the normalization constant for a given gap length z
+            # calculate the normalization constant for a given gap length z
             norm_const = 0
             for t in range(z + 2 * (self.r - self.s), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
                 norm_const += w(t - z , self.r, a, b, self.s) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
