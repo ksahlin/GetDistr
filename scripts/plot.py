@@ -15,12 +15,37 @@ import argparse
 
 import model
 
+from operator import itemgetter
+
 
 #TODO: Split up fcns: data_readin() to get vectors plot() and plot3d() for plotting.
 #frag_obj =model.NormalModel(500, 20, 100, 50)
 #frag_obj.expected_mean(0,10000,10000)
 
+def plot_ML_function(args):
 
+    avg_obs = args.gaps # if this plot is used, let gap sizes be average observations instead
+    if len(args.sigma) != 1:
+        print 'Only one value of standard deviation is allowed for this plot'
+        raise IOError
+    sigma = args.sigma[0] # only one standard deviation is allowed
+
+    fragm_dist_object = model.NormalModel(args.mean, sigma, args.readlen, args.softclipped)
+    for o in avg_obs:
+        likelihood_fcn  = fragm_dist_object.get_likelihood_function([o],args.reflen,10)
+        x,y = zip(*likelihood_fcn)
+        x = [i + o for i in x]
+        plt.plot(x,y)
+        index, element = max(enumerate(y), key=itemgetter(1))
+        x_max = x[index]
+        y_max = element
+        plt.annotate('x', xy=(x_max, y_max), xytext=(x_max-0.1, y_max-0.1))
+
+    plt.legend([r'$\bar{o}$ = %s'%avg_obs[i] for i in range(len(avg_obs))], loc='upper left')
+    plt.xlabel('$X$',fontsize=24)
+    plt.ylabel('$\log(L(X))$',fontsize=24)
+
+    plt.savefig(args.outfile, format='eps')
 
 def plot_mean_frag(args):
     """
@@ -197,11 +222,15 @@ if __name__ == '__main__':
     parser.add_argument("--std", dest='std', action="store_true",
                   help="Plots the expected standard deviation of fragment sizes over a gap.\
                    If --std is not specified, the mean fragment length is plotted (default = mean length)")
+    parser.add_argument("--ml", dest='ml', action="store_true",
+                  help="Plots the likelihood function for a given average observation.")
 
     args = parser.parse_args()
     if args.threedim:
         plot3d_mean_frag(args)
     elif args.std:
         plot_stddev_frag(args)
+    elif args.ml:
+        plot_ML_function(args)
     else:
         plot_mean_frag(args)

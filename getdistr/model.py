@@ -4,18 +4,22 @@ Created on Sep 20, 2013
 @author: ksahlin
 '''
 
-from math import log
+# from math import log
 
 from scipy import stats
 
-from decimal import Decimal, getcontext
-import math
+from mpmath import *
+mp.dps = 100 # decimal digits of precision
+
+#import math
 
 def normpdf(x, mu, sigma):
     #Get much better approximations with Decimal (simply more decimals)
-    getcontext().prec = 100
-    u = Decimal(str(x - mu)) / Decimal(str(abs(sigma)))
-    y = float(str((1 / Decimal(str((math.sqrt(2 * math.pi) * abs(sigma))))) * Decimal(str(-u * u / 2)).exp()))
+    #getcontext().prec = 100
+    #u = Decimal(str(x - mu)) / Decimal(str(abs(sigma)))
+    u = mpf((x - mu)) / mpf(sigma)
+    #y = float(str((1 / Decimal(str((math.sqrt(2 * math.pi) * abs(sigma))))) * Decimal(str(-u * u / 2)).exp()))
+    y = (1 / mpf((sqrt(2 * pi) * sigma)) * exp(mpf(-u * u / 2)))
     return y
 
 def w(o, r, a, b=None, s=None, infer_lib_mean=False):
@@ -58,38 +62,38 @@ def estimate_library_stddev(list_of_obs, r, a, soft=None):
 
 
 
-def dw(o, r, a, b=None, s=None):
-    raise NotImplementedError
+# def dw(o, r, a, b=None, s=None):
+#     raise NotImplementedError
 
-def ddw(o, r, a, b=None, s=None):
-    raise NotImplementedError
+# def ddw(o, r, a, b=None, s=None):
+#     raise NotImplementedError
 
-def f_general(o, r, a, b=None, s=None):
+# def f_general(o, r, a, b=None, s=None):
 
-    raise NotImplementedError
+#     raise NotImplementedError
 
-def f_normal(x, mu, sigma):
-    stats.norm.pdf(x, mu, sigma)
-    raise NotImplementedError
+# def f_normal(x, mu, sigma):
+#     stats.norm.pdf(x, mu, sigma)
+#     raise NotImplementedError
 
-def df_normal(o, r, a, b=None, s=None):
-    raise NotImplementedError
+# def df_normal(o, r, a, b=None, s=None):
+#     raise NotImplementedError
 
-class Weight(object):
-    def __init__(self, o, r, a, b=None, s=None):
-        self.o = o
-        self.r = r
-        self.a = a
-        self.b = b
-        self.s = s if s != None else r / 2
-        return()
+# class Weight(object):
+#     def __init__(self, o, r, a, b=None, s=None):
+#         self.o = o
+#         self.r = r
+#         self.a = a
+#         self.b = b
+#         self.s = s if s != None else r / 2
+#         return()
 
-    def w(self):
-        pass
+#     def w(self):
+#         pass
 
 
-    def dw(self):
-        raise NotImplementedError
+#     def dw(self):
+#         raise NotImplementedError
 
 
 class NormalModel(object):
@@ -103,11 +107,11 @@ class NormalModel(object):
         E_x_given_z = 0
         norm_const = 0
         for t in range(z + 2 * (self.r - self.s), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
-            norm_const += w(t - z , self.r, a, b, self.s) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
+            norm_const += w(t - z , self.r, a, b, self.s) * normpdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
 
         for y in range(2 * (self.r - self.s), self.mu + 6 * self.sigma - z): # iterate over possible observation span
             weight = w(y , self.r, a, b, self.s)
-            w_times_f = weight * stats.norm.pdf(z + y + 0.5, self.mu, self.sigma) # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
+            w_times_f = weight * normpdf(z + y + 0.5, self.mu, self.sigma) # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
             E_x_given_z += (y + z) * w_times_f / norm_const
         return(E_x_given_z)
 
@@ -128,7 +132,7 @@ class NormalModel(object):
 
 
 
-    def infer_mean(self, list_of_obs, a, precision, b=None):
+    def infer_mean(self, list_of_obs, a, precision, b=None, with_covarage = False):
         '''
             Instance method of a NormalModel object. Infers the mean fragment size of a given set of 
             paired read observations.
@@ -136,31 +140,10 @@ class NormalModel(object):
             Keyword arguments:
             @ argument list_of_obs A list of...
             @ argument a Reference sequence length
-            @ argument precision ... 
+            @ argument precision Number of base pairs between every point estimate of the ML distribution. 
         '''
 
-        print self.s, self.r, a, sum(list_of_obs) / len(list_of_obs)
-        likelihood_curve = []
-        for z in range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s)), precision):
-            ##
-            # calculate the normalization constant for a given gap length z
-            norm_const = 0
-            for t in range(z + 2 * (self.r - self.s), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
-                norm_const += w(t - z , self.r, a, b, self.s) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
-
-
-            ##
-            # calculate the nominator (relative frequency given a gap)
-            # in log() format
-            log_p_x_given_z = 0
-            for o in list_of_obs:
-                weight = w(o , self.r, a, b, self.s)
-                lib_dist = stats.norm.pdf(o + z + 0.5, self.mu, self.sigma)
-                #print z, weight, lib_dist, norm_const
-                log_p_x_given_z += log(weight) + log(lib_dist) - log(norm_const)
-
-            likelihood_curve.append((z, log_p_x_given_z))
-
+        likelihood_curve = self.get_likelihood_function(list_of_obs, a, precision, b, with_covarage)
         ml_gap = max(likelihood_curve, key=lambda x: x[1])
         #print likelihood_curve, ml_gap
         avg_obs = sum(list_of_obs) / len(list_of_obs)  # avg_obs is an integer (rounded to an even bp)
@@ -169,6 +152,53 @@ class NormalModel(object):
 
     def infer_variance(self):
         raise NotImplementedError
+
+    def get_likelihood_function(self, list_of_obs, a, precision, b=None, with_covarage = False):
+
+        if with_covarage:
+            coverage_probability()
+
+        likelihood_curve = []
+        o_temp =  list_of_obs[0]
+        ##
+        # This loop iterates over all possible zaps we want to see the ML estimation of
+        # The interesting range is in general not above  mean + 3*stddev
+
+        for z in range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s)), precision): #range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s)), precision):
+            
+            ##
+            # calculate the normalization constant for a given gap length z
+            norm_const = 0
+            for t in range(z + 2 * (self.r - self.s), self.mu + 4 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
+                #norm_const += w(t - z , self.r, a, b, self.s) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
+                norm_const += w(t - z , self.r, a, b, self.s) * normpdf(t + 0.5, self.mu, self.sigma)
+            #print z, norm_const #, norm_const2
+
+            ##
+            # calculate the nominator (relative frequency given a gap)
+            # in log() format
+            log_p_x_given_z = 0
+            for o in list_of_obs:
+                weight = w(o , self.r, a, b, self.s)
+                lib_dist = normpdf(o + z + 0.5, self.mu, self.sigma)
+                #print z, weight, lib_dist, norm_const
+                log_p_x_given_z += log(weight) + log(lib_dist) - log(norm_const)
+
+            likelihood_curve.append((z, log_p_x_given_z))
+
+        return(likelihood_curve)
+
+
+    def coverage_probability(self,list_of_obs, a, precision, covarage_mean_prior, b=None):
+        # call p(#links | c) here. what parameters necessary?
+        # call poisson prior on coverage here
+        prior_cov = 0
+        ML_links_given_coverage = 0
+        posterior_coverage_given_gap_and_links = ML_links_given_coverage * prior_cov
+        raise NotImplementedError
+        return posterior_coverage_given_gap_and_links
+         
+
 
 
 
