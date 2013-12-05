@@ -18,13 +18,36 @@ import model
 from operator import itemgetter
 
 
-#TODO: Split up fcns: data_readin() to get vectors plot() and plot3d() for plotting.
-#frag_obj =model.NormalModel(500, 20, 100, 50)
-#frag_obj.expected_mean(0,10000,10000)
+def plot_ML_function_varying_ref_size(args):   
+    ref_sizes = args.ref_seq_b # if this plot is used, let gap sizes be ref sise of sequence b instead
+    if len(args.sigma) != 1:
+        print 'Only one value of standard deviation is allowed for this plot'
+        raise IOError
+    sigma = args.sigma[0] # only one standard deviation is allowed
 
-def plot_ML_function(args):
+    fragm_dist_object = model.NormalModel(args.mean, sigma, args.readlen, args.softclipped)
 
-    avg_obs = args.gaps # if this plot is used, let gap sizes be average observations instead
+    for refsize in ref_sizes:
+        likelihood_fcn  = fragm_dist_object.get_likelihood_function(args.mean_obs,args.reflen,10, b=refsize)
+        x,y = zip(*likelihood_fcn)
+        x = [i + args.reflen for i in x]
+        plt.plot(x,y)
+        index, element = max(enumerate(y), key=itemgetter(1))
+        x_max = x[index]
+        y_max = element
+        plt.annotate('x', xy=(x_max, y_max), xytext=(x_max-0.05, y_max-0.05))
+
+
+    plt.legend([r'$o=250,a=100$,$b$ = %s'%ref_sizes[i] for i in range(len(ref_sizes))], loc='lower right')
+    plt.xlabel('$X$',fontsize=24)
+    plt.ylabel('$\log(L(X))$',fontsize=24)
+
+    plt.savefig(args.outfile, format='eps')
+
+
+def plot_ML_function_varying_obs(args):
+
+    avg_obs = args.mean_obs
     if len(args.sigma) != 1:
         print 'Only one value of standard deviation is allowed for this plot'
         raise IOError
@@ -208,9 +231,14 @@ if __name__ == '__main__':
     parser.add_argument("-a", dest="reflen", type=int, required=True,
                   help="Reference sequence length.")
 
+    #ml curve plotting parameters
+    parser.add_argument("-obs", dest="mean_obs", type=int, nargs='+', required=False,
+                  help="Mean observation.")
+    parser.add_argument("-b", dest="ref_seq_b", type=int, nargs='+', required=False,
+                  help="Length of reference sequence b.")
 
     # for plotting
-    parser.add_argument("-z", dest="gaps", type=int, nargs='+', required=True,
+    parser.add_argument("-z", dest="gaps", type=int, nargs='+', required=False,
                   help="sample gap sizes to fit the line to.")
 
     parser.add_argument("-o", dest="outfile", type=str, required=True,
@@ -222,15 +250,19 @@ if __name__ == '__main__':
     parser.add_argument("--std", dest='std', action="store_true",
                   help="Plots the expected standard deviation of fragment sizes over a gap.\
                    If --std is not specified, the mean fragment length is plotted (default = mean length)")
-    parser.add_argument("--ml", dest='ml', action="store_true",
+    parser.add_argument("--ml_obs", dest='mlobs', action="store_true",
                   help="Plots the likelihood function for a given average observation.")
+    parser.add_argument("--ml_refsize", dest='mlref', action="store_true",
+                  help="Plots the likelihood function for varying reference sequence sizes.")
 
     args = parser.parse_args()
     if args.threedim:
         plot3d_mean_frag(args)
     elif args.std:
         plot_stddev_frag(args)
-    elif args.ml:
-        plot_ML_function(args)
+    elif args.mlobs:
+        plot_ML_function_varying_obs(args)
+    elif args.mlref:
+        plot_ML_function_varying_ref_size(args)
     else:
         plot_mean_frag(args)

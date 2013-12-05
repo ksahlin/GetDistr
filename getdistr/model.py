@@ -154,17 +154,30 @@ class NormalModel(object):
         raise NotImplementedError
 
     def get_likelihood_function(self, list_of_obs, a, precision, b=None, with_covarage = False):
+        '''This function gives back the likelihood values for Z (gap/unknown sequence length)
+            parameters
+            __________
+            @param list_of_obs: A list of observations
+            @param a: Reference sequence length
+            @param precision: 
 
+        '''
         if with_covarage:
             coverage_probability()
 
         likelihood_curve = []
-        o_temp =  list_of_obs[0]
+
+        ## For plotting!
+        # o_temp =  list_of_obs[0] <-- Only for plotting
+        # range( 3 * self.sigma - o_temp, - o_temp + self.mu + int(5.5 * self.sigma) - (2 * (self.r - self.s)), precision): 
+        # <-- Use the above range for plotting with same intervals, this function gives back likelihood alues of 
+        # X instead of Z which is what we want in the MLfcns plots.
+
         ##
         # This loop iterates over all possible zaps we want to see the ML estimation of
         # The interesting range is in general not above  mean + 3*stddev
 
-        for z in range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s)), precision): #range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s)), precision):
+        for z in range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s)), precision):
             
             ##
             # calculate the normalization constant for a given gap length z
