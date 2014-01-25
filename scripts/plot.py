@@ -38,7 +38,7 @@ def plot_ML_function_varying_ref_size(args):
         plt.annotate('x', xy=(x_max, y_max), xytext=(x_max-0.05, y_max-0.05))
 
 
-    plt.legend([r'$o=250,a=100$,$b$ = %s'%ref_sizes[i] for i in range(len(ref_sizes))], loc='lower right')
+    plt.legend([r'$\bar{o}=250,a=100$,$b$ = %s'%ref_sizes[i] for i in range(len(ref_sizes))], loc='lower right')
     plt.xlabel('$X$',fontsize=24)
     plt.ylabel('$\log(L(X))$',fontsize=24)
 
@@ -52,10 +52,10 @@ def plot_ML_function_varying_obs(args):
         print 'Only one value of standard deviation is allowed for this plot'
         raise IOError
     sigma = args.sigma[0] # only one standard deviation is allowed
-
+    nr_links = [4, 10, 20, 50, 120 ]
     fragm_dist_object = model.NormalModel(args.mean, sigma, args.readlen, args.softclipped)
-    for o in avg_obs:
-        likelihood_fcn  = fragm_dist_object.get_likelihood_function([o],args.reflen,10)
+    for i,o in enumerate(avg_obs):
+        likelihood_fcn  = fragm_dist_object.get_likelihood_function([o],args.reflen,10, coverage = 50,n =nr_links[i])
         x,y = zip(*likelihood_fcn)
         x = [i + o for i in x]
         plt.plot(x,y)
@@ -64,7 +64,8 @@ def plot_ML_function_varying_obs(args):
         y_max = element
         plt.annotate('x', xy=(x_max, y_max), xytext=(x_max-0.1, y_max-0.1))
 
-    plt.legend([r'$\bar{o}$ = %s'%avg_obs[i] for i in range(len(avg_obs))], loc='upper left')
+
+    plt.legend([r'$\bar{o}$ = %s, $c = 50$, $n = %s $'%(avg_obs[i],nr_links[i]) for i in range(len(avg_obs))], loc='lower right')
     plt.xlabel('$X$',fontsize=24)
     plt.ylabel('$\log(L(X))$',fontsize=24)
 

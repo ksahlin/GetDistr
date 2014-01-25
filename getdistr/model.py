@@ -11,6 +11,9 @@ from scipy import stats
 from mpmath import *
 mp.dps = 100 # decimal digits of precision
 
+from scipy.stats import poisson, nbinom,uniform
+
+from coverage import mean_span_coverage, Param
 #import math
 
 def normpdf(x, mu, sigma):
@@ -153,7 +156,7 @@ class NormalModel(object):
     def infer_variance(self):
         raise NotImplementedError
 
-    def get_likelihood_function(self, list_of_obs, a, precision, b=None, with_covarage = False):
+    def get_likelihood_function(self, list_of_obs, a, precision, b=None, coverage = False,n = None):
         '''This function gives back the likelihood values for Z (gap/unknown sequence length)
             parameters
             __________
@@ -162,27 +165,26 @@ class NormalModel(object):
             @param precision: 
 
         '''
-        if with_covarage:
-            coverage_probability()
 
         likelihood_curve = []
 
         ## For plotting!
-        # o_temp =  list_of_obs[0] <-- Only for plotting
+        #o_temp =  list_of_obs[0] # <-- Only for plotting
         # range( 3 * self.sigma - o_temp, - o_temp + self.mu + int(5.5 * self.sigma) - (2 * (self.r - self.s)), precision): 
+        # range( 3 * self.sigma - o_temp, - o_temp + self.mu + int(5 * self.sigma) - (2 * (self.r - self.s)), precision): 
         # <-- Use the above range for plotting with same intervals, this function gives back likelihood alues of 
         # X instead of Z which is what we want in the MLfcns plots.
 
         ##
-        # This loop iterates over all possible zaps we want to see the ML estimation of
+        # This loop iterates over all possible gaps z, we want to see the ML estimation of
         # The interesting range is in general not above  mean + 3*stddev
 
-        for z in range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s)), precision):
+        for z in range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s)), precision): 
             
             ##
             # calculate the normalization constant for a given gap length z
             norm_const = 0
-            for t in range(z + 2 * (self.r - self.s), self.mu + 4 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
+            for t in range(z + 2 * (self.r - self.s), self.mu + 7 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
                 #norm_const += w(t - z , self.r, a, b, self.s) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
                 norm_const += w(t - z , self.r, a, b, self.s) * normpdf(t + 0.5, self.mu, self.sigma)
             #print z, norm_const #, norm_const2
@@ -197,25 +199,51 @@ class NormalModel(object):
                 #print z, weight, lib_dist, norm_const
                 log_p_x_given_z += log(weight) + log(lib_dist) - log(norm_const)
 
-            likelihood_curve.append((z, log_p_x_given_z))
+            if coverage:
+                p_n_given_z = self.coverage_probability(n, a, self.mu, self.sigma, z, coverage, self.r, self.s, b)
+                log_p_n_given_z = log(p_n_given_z)/n
+                likelihood_curve.append((z, log_p_x_given_z + log_p_n_given_z))
+            else:
+                likelihood_curve.append((z, log_p_x_given_z))
 
         return(likelihood_curve)
 
 
-    def coverage_probability(self,list_of_obs, a, precision, covarage_mean_prior, b=None):
-        # call p(#links | c) here. what parameters necessary?
-        # call poisson prior on coverage here
-        prior_cov = 0
-        ML_links_given_coverage = 0
-        posterior_coverage_given_gap_and_links = ML_links_given_coverage * prior_cov
-        raise NotImplementedError
-        return posterior_coverage_given_gap_and_links
+    def coverage_probability(self,nr_obs, a, mean_lib, stddev_lib,z, coverage_mean, read_len, softclipped, b=None):
+        ''' Distribution P(o|c,z) for prior probability over coverage.
+            This probability distribution is implemented as an poisson 
+            distribution.
+
+            Attributes:
+
+            c       -- coverage
+            mean    -- mean value of poisson distribution.
+
+            Returns probability P(c)
+
+        '''
+        if not b: 
+            # only one reference sequence.
+            # We split the reference sequence into two equal 
+            # length sequences to fit the model. 
+            a = a/2
+            b = a/2
+        param = Param(mean_lib, stddev_lib, coverage_mean, read_len, softclipped)
+        lambda_ = mean_span_coverage(a, b, z, param)
+
+        #print lambda_ , z,uniform.pdf(nr_obs, loc=lambda_- 0.3*lambda_, scale=lambda_ + 0.3*lambda_ ),nr_obs
+        #p = 0.01
+        #n = (p*lambda_)/(1-p)
+        #return uniform.pdf(nr_obs, loc=0, scale=50)
+        #return nbinom.pmf(nr_obs, n, p, loc=0) 
+        return poisson.pmf(nr_obs, lambda_, loc=0)
+
          
 
 
 
 
-class GeneralModel(object):
+class GeneralModel(object): 
     def __init__(self, histogram, r, s=None):
         self.histogram = histogram
         self.r = r
