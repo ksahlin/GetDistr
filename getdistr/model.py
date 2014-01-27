@@ -153,7 +153,33 @@ class NormalModel(object):
     def infer_mean(self, list_of_obs, a, precision, b=None, coverage = False, n = False, coverage_model = False):
         '''
             Instance method of a NormalModel object. Infers the mean fragment size of a given set of 
-            paired read observations.
+            paired read observations O(n^2) complexity. This function is only included (or still remaining)
+            for historical and verification purposes. It performes an exhaustive search for optimum.
+            Use infer_mean_fast for O(n log n) in complexity.
+            
+            Keyword arguments:
+            @ argument list_of_obs: A list of...
+            @ argument a:           Reference sequence length
+            @ argument precision:   Number of base pairs between every point estimate of the ML distribution. 
+            @ argument coverage:    Mean coverage.
+            @ argument coverage_model:  The assumed coverage distribution around the mean. Valid strings are 'Uniform',
+                                        'NegBin' or 'Poisson'.
+
+            Returns:
+            Maximum likelihood value for fragment length X.
+        '''
+
+        likelihood_curve = self.get_likelihood_function(list_of_obs, a, precision, b, coverage, n, coverage_model)
+        ml_gap = max(likelihood_curve, key=lambda x: x[1])
+        #print likelihood_curve, ml_gap
+        avg_obs = sum(list_of_obs) / len(list_of_obs)  # avg_obs is an integer (rounded to an even bp)
+        #print avg_obs + ml_gap[0]
+        return(avg_obs + ml_gap[0])
+
+    def infer_mean_fast(self, list_of_obs, a, precision, b=None, coverage = False, n = False, coverage_model = False):
+        '''
+            Instance method of a NormalModel object. Infers the mean fragment size of a given set of 
+            paired read observations using .
             
             Keyword arguments:
             @ argument list_of_obs: A list of...
@@ -164,18 +190,86 @@ class NormalModel(object):
                                         'NegBin' or 'Poisson'.
         '''
 
-        likelihood_curve = self.get_likelihood_function(list_of_obs, a, precision, b, coverage, n, coverage_model)
-        ml_gap = max(likelihood_curve, key=lambda x: x[1])
-        #print likelihood_curve, ml_gap
-        avg_obs = sum(list_of_obs) / len(list_of_obs)  # avg_obs is an integer (rounded to an even bp)
-        #print avg_obs + ml_gap[0]
-        return(avg_obs + ml_gap[0])
+        #do binary search among limited range of values
+        
+        z_upper= self.mu + 3 * self.sigma - (2 * (self.r - self.s))
+        z_lower=-3 * self.sigma
+        z_u = int((z_upper+z_lower)/2.0 + precision)
+        z_l = int((z_upper+z_lower)/2.0)
+        print z_u,z_l
+        while z_upper-z_lower>precision:
+            
+            likelihood_of_z_u = self.get_likelihood_value(z_u, list_of_obs, a, b, coverage,n , coverage_model)
+            likelihood_of_z_l = self.get_likelihood_value(z_l, list_of_obs, a, b, coverage,n , coverage_model)
+            print likelihood_of_z_u, likelihood_of_z_l
+            if likelihood_of_z_u>likelihood_of_z_l:
+                z_lower = z_u
+                z_u = int((z_upper+z_u)/2.0 + precision)
+                z_l = z_u -precision
+
+            else:
+                z_upper = z_l
+                z_u = int((z_lower+z_l)/2.0 + precision)
+                z_l = z_u - precision
+            print z_u,z_l
+        print max(z_u,z_l)
+
+        return(max(z_u,z_l))
+
 
     def infer_variance(self):
         raise NotImplementedError
 
+    def get_likelihood_value(self, z, list_of_obs, a, b=None, coverage = False,n = False, coverage_model = False):
+        '''
+        This function gives back a single likelihood value from the likelihood function
+            parameters
+            __________
+            @param list_of_obs:         A list of observations
+            @param a:                   Reference sequence length
+            @param precision: 
+            @ argument coverage:        Mean coverage.
+            @ argument coverage_model:  The assumed coverage distribution around the mean. Valid strings are 'Uniform',
+                                        'NegBin' or 'Poisson'.
+        '''
+        if coverage:
+            n = len(list_of_obs)
+            if not coverage_model:
+                warnings.warn("Warning: Coverage parameter is set to True but no 'coverage_model' parameter set. \
+                defaulting to uniform coverage. ")
+        ##
+        # calculate the normalization constant for a given gap length z
+        norm_const = 0
+        for t in range(z + 2 * (self.r - self.s), self.mu + 7 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
+            #norm_const += w(t - z , self.r, a, b, self.s) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
+            norm_const += w(t - z , self.r, a, b, self.s) * normpdf(t + 0.5, self.mu, self.sigma)
+        #print z, norm_const #, norm_const2
+
+        ##
+        # calculate the nominator (relative frequency given a gap)
+        # in log() format
+        log_p_x_given_z = 0
+        for o in list_of_obs:
+            weight = w(o , self.r, a, b, self.s)
+            lib_dist = normpdf(o + z + 0.5, self.mu, self.sigma)
+            #print z, weight, lib_dist, norm_const
+            log_p_x_given_z += log(weight) + log(lib_dist) - log(norm_const)
+
+        if coverage:
+            p_n_given_z = self.coverage_probability(n, a, self.mu, self.sigma, z, coverage, self.r, self.s, b, coverage_model)
+            log_p_n_given_z = log(p_n_given_z)/n
+            return log_p_x_given_z + log_p_n_given_z
+        else:
+            return log_p_x_given_z
+
+
+    # Move out: for z in range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s)), precision):
+    # and put it inside infer_mean function??
+    # also add a function (separate out): "get_likelihood_function" so that plotting scripts still works
+
     def get_likelihood_function(self, list_of_obs, a, precision, b=None, coverage = False,n = False, coverage_model = False):
-        '''This function gives back the likelihood values for Z (gap/unknown sequence length)
+        '''
+        This function gives back the likelihood values for Z (gap/unknown sequence length)
             parameters
             __________
             @param list_of_obs:         A list of observations
