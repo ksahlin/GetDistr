@@ -4,7 +4,8 @@ Created on Sep 20, 2013
 @author: ksahlin
 '''
 
-# from math import log
+
+import warnings
 
 from scipy import stats
 
@@ -100,6 +101,12 @@ def estimate_library_stddev(list_of_obs, r, a, soft=None):
 
 
 class NormalModel(object):
+    ''' 
+        Derives the most probable observed library distribution
+        given a full library distribution that is normally distributed.
+
+    '''
+
     def __init__(self, mu, sigma, r, s=None):
         self.mu = mu
         self.sigma = sigma
@@ -107,6 +114,10 @@ class NormalModel(object):
         self.s = s if s != None else r / 2
 
     def expected_mean(self, z, a, b=None):
+        '''
+        Returns expected mean fragment size length given a gap of length z and reference lengths a,b.
+        It is assumed that you have my,sigma of the underlying library and the read length r.
+        '''
         E_x_given_z = 0
         norm_const = 0
         for t in range(z + 2 * (self.r - self.s), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
@@ -119,6 +130,10 @@ class NormalModel(object):
         return(E_x_given_z)
 
     def expected_standard_deviation(self, z, a, b=None):
+        '''
+        Returns expected standard deviation of fragment size length given a gap of length z and reference lengths a,b.
+        It is assumed that you have my,sigma of the underlying library and the read length r.
+        '''
         E_x_given_z = self.expected_mean(z, a, b)
         E_x_square_given_z = 0
         norm_const = 0
@@ -135,36 +150,48 @@ class NormalModel(object):
 
 
 
-    def infer_mean(self, list_of_obs, a, precision, b=None, with_covarage = False):
+    def infer_mean(self, list_of_obs, a, precision, b=None, coverage = False, n = False, coverage_model = False):
         '''
             Instance method of a NormalModel object. Infers the mean fragment size of a given set of 
             paired read observations.
             
             Keyword arguments:
-            @ argument list_of_obs A list of...
-            @ argument a Reference sequence length
-            @ argument precision Number of base pairs between every point estimate of the ML distribution. 
+            @ argument list_of_obs: A list of...
+            @ argument a:           Reference sequence length
+            @ argument precision:   Number of base pairs between every point estimate of the ML distribution. 
+            @ argument coverage:    Mean coverage.
+            @ argument coverage_model:  The assumed coverage distribution around the mean. Valid strings are 'Uniform',
+                                        'NegBin' or 'Poisson'.
         '''
 
-        likelihood_curve = self.get_likelihood_function(list_of_obs, a, precision, b, with_covarage)
+        likelihood_curve = self.get_likelihood_function(list_of_obs, a, precision, b, coverage, n, coverage_model)
         ml_gap = max(likelihood_curve, key=lambda x: x[1])
         #print likelihood_curve, ml_gap
         avg_obs = sum(list_of_obs) / len(list_of_obs)  # avg_obs is an integer (rounded to an even bp)
-        print avg_obs + ml_gap[0]
+        #print avg_obs + ml_gap[0]
         return(avg_obs + ml_gap[0])
 
     def infer_variance(self):
         raise NotImplementedError
 
-    def get_likelihood_function(self, list_of_obs, a, precision, b=None, coverage = False,n = None):
+    def get_likelihood_function(self, list_of_obs, a, precision, b=None, coverage = False,n = False, coverage_model = False):
         '''This function gives back the likelihood values for Z (gap/unknown sequence length)
             parameters
             __________
-            @param list_of_obs: A list of observations
-            @param a: Reference sequence length
+            @param list_of_obs:         A list of observations
+            @param a:                   Reference sequence length
             @param precision: 
+            @ argument coverage:        Mean coverage.
+            @ argument coverage_model:  The assumed coverage distribution around the mean. Valid strings are 'Uniform',
+                                        'NegBin' or 'Poisson'.
+
 
         '''
+        if coverage:
+            n = len(list_of_obs)
+            if not coverage_model:
+                warnings.warn("Warning: Coverage parameter is set to True but no 'coverage_model' parameter set. \
+                defaulting to uniform coverage. ")
 
         likelihood_curve = []
 
@@ -200,7 +227,7 @@ class NormalModel(object):
                 log_p_x_given_z += log(weight) + log(lib_dist) - log(norm_const)
 
             if coverage:
-                p_n_given_z = self.coverage_probability(n, a, self.mu, self.sigma, z, coverage, self.r, self.s, b)
+                p_n_given_z = self.coverage_probability(n, a, self.mu, self.sigma, z, coverage, self.r, self.s, b, coverage_model)
                 log_p_n_given_z = log(p_n_given_z)/n
                 likelihood_curve.append((z, log_p_x_given_z + log_p_n_given_z))
             else:
@@ -209,7 +236,7 @@ class NormalModel(object):
         return(likelihood_curve)
 
 
-    def coverage_probability(self,nr_obs, a, mean_lib, stddev_lib,z, coverage_mean, read_len, softclipped, b=None):
+    def coverage_probability(self,nr_obs, a, mean_lib, stddev_lib,z, coverage_mean, read_len, softclipped, b=None, coverage_model = False):
         ''' Distribution P(o|c,z) for prior probability over coverage.
             This probability distribution is implemented as an poisson 
             distribution.
@@ -228,15 +255,21 @@ class NormalModel(object):
             # length sequences to fit the model. 
             a = a/2
             b = a/2
+
         param = Param(mean_lib, stddev_lib, coverage_mean, read_len, softclipped)
         lambda_ = mean_span_coverage(a, b, z, param)
 
-        #print lambda_ , z,uniform.pdf(nr_obs, loc=lambda_- 0.3*lambda_, scale=lambda_ + 0.3*lambda_ ),nr_obs
-        #p = 0.01
-        #n = (p*lambda_)/(1-p)
-        #return uniform.pdf(nr_obs, loc=0, scale=50)
-        #return nbinom.pmf(nr_obs, n, p, loc=0) 
-        return poisson.pmf(nr_obs, lambda_, loc=0)
+        if coverage_model == 'Poisson':
+            return poisson.pmf(nr_obs, lambda_, loc=0)
+
+        elif coverage_model == 'NegBin':
+            p = 0.01
+            n = (p*lambda_)/(1-p)
+            return nbinom.pmf(nr_obs, n, p, loc=0) 
+        else:
+            # This is equivalent to uniform coverage
+            return 1 #uniform.pdf(nr_obs, loc=lambda_- 0.3*lambda_, scale=lambda_ + 0.3*lambda_ )
+
 
          
 
