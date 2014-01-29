@@ -15,6 +15,7 @@ mp.dps = 50 # decimal digits of precision
 from scipy.stats import poisson, nbinom,uniform
 
 from coverage import mean_span_coverage, Param
+from mathstats.normaldist.truncatedskewed import param_est
 #import math
 
 def normpdf(x, mu, sigma):
@@ -117,7 +118,7 @@ class NormalModel(object):
 
 
 
-    def infer_mean(self, list_of_obs, a, precision, b=None, coverage = False, n = False, coverage_model = False):
+    def infer_mean_slow(self, list_of_obs, a, precision, b=None, coverage = False, n = False, coverage_model = False):
         '''
             Instance method of a NormalModel object. Infers the mean fragment size of a given set of 
             paired read observations O(n^2) complexity. This function is only included (or still remaining)
@@ -135,6 +136,7 @@ class NormalModel(object):
             Returns:
             Maximum likelihood value for fragment length X.
         '''
+        warnings.warn("Warning: This function is deprecated. Use 'infer_mean_fast' or 'run_GapEst' for fast calculation.")
 
         likelihood_curve = self.get_likelihood_function(list_of_obs, a, precision, b, coverage, n, coverage_model)
         ml_gap = max(likelihood_curve, key=lambda x: x[1])
@@ -179,6 +181,17 @@ class NormalModel(object):
 
         return(max(z_u,z_l))
 
+    def run_GapEst(self, list_of_obs, a, b=None):
+        if b == None:
+            # GapEst only works with two reference sequences
+            # Just split a into two sequences. Hopefully a is long
+            # enough compared to the mean and std dev of the library
+            # so that this does not affect the result too much.
+            b = a/2
+            a = a/2
+        mean_obs = float(sum(list_of_obs))/len(list_of_obs)
+        # gapest does not handle softclipping so we send in self.r - self.s as the effective read length
+        return param_est.GapEstimator(self.mu, self.sigma, self.r - self.s, mean_obs, a, b)
 
     def infer_variance(self):
         raise NotImplementedError
