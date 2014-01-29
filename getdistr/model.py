@@ -10,7 +10,7 @@ import warnings
 from scipy import stats
 
 from mpmath import *
-mp.dps = 100 # decimal digits of precision
+mp.dps = 50 # decimal digits of precision
 
 from scipy.stats import poisson, nbinom,uniform
 
@@ -65,39 +65,6 @@ def estimate_library_stddev(list_of_obs, r, a, soft=None):
     raise NotImplementedError
 
 
-
-# def dw(o, r, a, b=None, s=None):
-#     raise NotImplementedError
-
-# def ddw(o, r, a, b=None, s=None):
-#     raise NotImplementedError
-
-# def f_general(o, r, a, b=None, s=None):
-
-#     raise NotImplementedError
-
-# def f_normal(x, mu, sigma):
-#     stats.norm.pdf(x, mu, sigma)
-#     raise NotImplementedError
-
-# def df_normal(o, r, a, b=None, s=None):
-#     raise NotImplementedError
-
-# class Weight(object):
-#     def __init__(self, o, r, a, b=None, s=None):
-#         self.o = o
-#         self.r = r
-#         self.a = a
-#         self.b = b
-#         self.s = s if s != None else r / 2
-#         return()
-
-#     def w(self):
-#         pass
-
-
-#     def dw(self):
-#         raise NotImplementedError
 
 
 class NormalModel(object):
@@ -196,12 +163,10 @@ class NormalModel(object):
         z_lower=-3 * self.sigma
         z_u = int((z_upper+z_lower)/2.0 + precision)
         z_l = int((z_upper+z_lower)/2.0)
-        print z_u,z_l
         while z_upper-z_lower>precision:
             
             likelihood_of_z_u = self.get_likelihood_value(z_u, list_of_obs, a, b, coverage,n , coverage_model)
             likelihood_of_z_l = self.get_likelihood_value(z_l, list_of_obs, a, b, coverage,n , coverage_model)
-            print likelihood_of_z_u, likelihood_of_z_l
             if likelihood_of_z_u>likelihood_of_z_l:
                 z_lower = z_u
                 z_u = int((z_upper+z_u)/2.0 + precision)
@@ -211,8 +176,6 @@ class NormalModel(object):
                 z_upper = z_l
                 z_u = int((z_lower+z_l)/2.0 + precision)
                 z_l = z_u - precision
-            print z_u,z_l
-        print max(z_u,z_l)
 
         return(max(z_u,z_l))
 
@@ -291,8 +254,8 @@ class NormalModel(object):
 
         ## For plotting!
         #o_temp =  list_of_obs[0] # <-- Only for plotting
-        # range( 3 * self.sigma - o_temp, - o_temp + self.mu + int(5.5 * self.sigma) - (2 * (self.r - self.s)), precision): 
-        # range( 3 * self.sigma - o_temp, - o_temp + self.mu + int(5 * self.sigma) - (2 * (self.r - self.s)), precision): 
+        # z in range( 3 * self.sigma - o_temp, - o_temp + self.mu + int(5.5 * self.sigma) - (2 * (self.r - self.s)), precision): 
+        # z in range( 3 * self.sigma - o_temp, - o_temp + self.mu + int(5 * self.sigma) - (2 * (self.r - self.s)), precision): 
         # <-- Use the above range for plotting with same intervals, this function gives back likelihood alues of 
         # X instead of Z which is what we want in the MLfcns plots.
 
@@ -301,31 +264,7 @@ class NormalModel(object):
         # The interesting range is in general not above  mean + 3*stddev
 
         for z in range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s)), precision): 
-            
-            ##
-            # calculate the normalization constant for a given gap length z
-            norm_const = 0
-            for t in range(z + 2 * (self.r - self.s), self.mu + 7 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
-                #norm_const += w(t - z , self.r, a, b, self.s) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
-                norm_const += w(t - z , self.r, a, b, self.s) * normpdf(t + 0.5, self.mu, self.sigma)
-            #print z, norm_const #, norm_const2
-
-            ##
-            # calculate the nominator (relative frequency given a gap)
-            # in log() format
-            log_p_x_given_z = 0
-            for o in list_of_obs:
-                weight = w(o , self.r, a, b, self.s)
-                lib_dist = normpdf(o + z + 0.5, self.mu, self.sigma)
-                #print z, weight, lib_dist, norm_const
-                log_p_x_given_z += log(weight) + log(lib_dist) - log(norm_const)
-
-            if coverage:
-                p_n_given_z = self.coverage_probability(n, a, self.mu, self.sigma, z, coverage, self.r, self.s, b, coverage_model)
-                log_p_n_given_z = log(p_n_given_z)/n
-                likelihood_curve.append((z, log_p_x_given_z + log_p_n_given_z))
-            else:
-                likelihood_curve.append((z, log_p_x_given_z))
+            likelihood_curve.append((z,self.get_likelihood_value(z, list_of_obs, a, b, coverage,n , coverage_model)))
 
         return(likelihood_curve)
 
