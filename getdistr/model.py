@@ -28,6 +28,22 @@ def normpdf(x, mu, sigma):
     return y
 
 def w(o, r, a, b=None, s=None, infer_lib_mean=False):
+    '''
+        Calculate the weight for a given observation.
+
+        Parameters:
+
+        o       -- An observation (an integer)
+        r       -- The read length.
+
+
+        Returns the weight that this observation has (a number between 0 and 1).
+
+    '''
+    ##
+    # If no softclipping parameter is given. Default number 
+    # of allowed softclipped bases to half of the readlength.
+    s = s if s != None else r / 2
     w_fcn = []
     ##
     # Weight function in the case where we want to estimate the original library mean
@@ -52,18 +68,35 @@ def w(o, r, a, b=None, s=None, infer_lib_mean=False):
 
     return(min(w_fcn))
 
-def estimate_library_mean(list_of_obs, r, a, soft=None):
+def estimate_library_parameters(list_of_obs, r, a, soft=None):
     sample_obs_sum = 0
+    sample_obs_sum_sq = 0
     number_of_obs_sum = 0
+    number_of_obs_sum_sq = 0
+
     for o in list_of_obs:
         weight = float(w(o, r, a, s=soft, infer_lib_mean=True))
         sample_obs_sum += o / weight
         number_of_obs_sum += 1 / weight
-    print sample_obs_sum / number_of_obs_sum
-    return(sample_obs_sum / number_of_obs_sum)
+        sample_obs_sum_sq  += o**2/weight #(o / weight)**2
+        number_of_obs_sum_sq += 1 / weight**2
+    # formulas for mean and variance
+    mu = sample_obs_sum / number_of_obs_sum
+    sigma = sqrt(sample_obs_sum_sq /number_of_obs_sum - mu**2 )      #/ number_of_obs_sum_sq - mu**2)
+    print mu,sigma , sample_obs_sum_sq ,number_of_obs_sum
+    return(mu,sigma)
 
-def estimate_library_stddev(list_of_obs, r, a, soft=None):
-    raise NotImplementedError
+# def estimate_library_stddev(list_of_obs, mu, weighted_sum, r, a, soft=None):
+#     sample_obs_sum = 0
+#     number_of_obs_sum = 0
+#     for o in list_of_obs:
+#         weight = float(w(o, r, a, s=soft, infer_lib_mean=True))
+#         sample_obs_sum += o / weight
+#         number_of_obs_sum += 1 / weight
+#     print sample_obs_sum / number_of_obs_sum
+#     return(sample_obs_sum / number_of_obs_sum)   
+
+#     raise NotImplementedError
 
 
 
