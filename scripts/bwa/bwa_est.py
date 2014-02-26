@@ -59,14 +59,14 @@ def get_getdistr_results(bam_path, args):
             if alignedread.is_read1 and not alignedread.is_unmapped and not alignedread.mate_is_unmapped :  # only count an observation from a read pair once 
                 list_of_obs.append(alignedread.tlen)
                 #if len(alignedread.cigar) > 1:
-                print alignedread.cigarstring
+                #print alignedread.cigarstring
 
     # Put allowed soft clips to 0, because BWA does not align outside boundaries of the reference.
     # i.e. reeds need to be fully contained (mapped) to the contig in this case.
     mean_est,std_dev_est = model.estimate_library_parameters(list_of_obs, 100, args.cont_len, soft=0)
     mean_naive = sum(list_of_obs) / float(len(list_of_obs))
     print(mean_est,std_dev_est, mean_naive, len(list_of_obs))
-    print list_of_obs
+    #print list_of_obs
     return mean_est,std_dev_est, len(list_of_obs)
 
 def print_format(file_, parameters, bwa_means,bwa_stddevs,get_distr_means,get_distr_stddevs,nr_obs_list):
@@ -78,6 +78,9 @@ def print_format(file_, parameters, bwa_means,bwa_stddevs,get_distr_means,get_di
     avg_nr_obs_list        = sum(nr_obs_list)/n
 
     sample_stddev_bwa_mean = (sum(map(lambda x: (x-avg_bwa_mean)**2, bwa_means))/float(n))**0.5
+    sample_stddev_bwa_stddev = (sum(map(lambda x: (x-avg_bwa_stddev )**2, bwa_stddevs))/float(n))**0.5
+    sample_stddev_getdistr_mean= (sum(map(lambda x: (x-avg_getdistr_mean )**2, get_distr_means))/float(n))**0.5
+    sample_stddev_getdistr_stddev = (sum(map(lambda x: (x-avg_getdistr_stddev)**2, get_distr_stddevs))/float(n))**0.5
 
     for i,item in enumerate(parameters):
         # if i+1 == len(parameters):
@@ -85,8 +88,10 @@ def print_format(file_, parameters, bwa_means,bwa_stddevs,get_distr_means,get_di
         # else:
         file_.write(str(item)+'\t')
 
-    file_.write(str(nr_obs_list)+'\t'+str(avg_bwa_mean)+'\t'+str(avg_bwa_stddev)+'\t'
-        +str(avg_getdistr_mean)+'\t'+str(avg_getdistr_stddev)+'\t'+str(sample_stddev_bwa_mean)+'\n')
+    file_.write(str(int(avg_nr_obs_list))+'\t'+str(int(avg_bwa_mean))+'\t'+str(int(avg_bwa_stddev))+'\t'
+        +str(int(avg_getdistr_mean))+'\t'+str(int(avg_getdistr_stddev))+'\t'+str(int(sample_stddev_bwa_mean))
+        +'\t'+str(int(sample_stddev_bwa_stddev)) + '\t'+str(int(sample_stddev_getdistr_mean))+ 
+        '\t'+str(int(sample_stddev_getdistr_stddev))+'\n')
 
 
 
@@ -94,8 +99,8 @@ def main(args):
 
     sim_out = open(os.path.join(args.outpath,'bwa_vs_getdristr_sim_out'),'w')
     sim_out.write('lib_mean\tlib_std\tcov\tread_len\tcont_len\tnr_trials\tavg_nr_mapped_pairs\t \
-        bwa_mean_average\tbwa_stddev_average\tbwa_sample_std_dev_of_mean\tbwa_sample_std_dev_of_stddev\t \
-        getdistr_mean_average\tgetdistr_stddev_average\tgetdistr_sample_stddev_of_mean\t \
+        bwa_mean_average\tbwa_stddev_average\tgetdistr_mean_average\tgetdistr_stddev_average\t \
+        bwa_sample_std_dev_of_mean\tbwa_sample_std_dev_of_stddev\tgetdistr_sample_stddev_of_mean\t \
         getdistr_sample_stddev_of_stddev\n')
     experiment_folder = os.path.join(args.outpath,'experiment_files')
     if not os.path.exists(experiment_folder):
