@@ -18,6 +18,7 @@ import model
 from operator import itemgetter
 
 
+
 def plot_ML_function_varying_ref_size(args):   
     ref_sizes = args.ref_seq_b # if this plot is used, let gap sizes be ref sise of sequence b instead
     if len(args.sigma) != 1:
