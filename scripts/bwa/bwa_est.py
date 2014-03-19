@@ -10,10 +10,12 @@ import os
 import argparse
 import pysam
 import subprocess
+import math
 
 from getdistr import model
 import bam_file_gen
 import re
+
 
 # model.estimate_library_mean(list_of_obs, r, a, s=None)
 
@@ -49,23 +51,83 @@ def get_bwa_results(bwa_file):
     print 'BWA OUUUUT:', mean,std_dev
     return mean,std_dev
 
+def get_quantile(list_,quantile):
+    try:
+        quantile_index = int(( len( list_ ) - 1) * quantile)
+        return  list_[ quantile_index  ]
+    except TypeError:   #<  There were an even amount of values
+        # Make sure to type results of math.floor/ceil to int for use in list indices
+        ceil = int( math.ceil( quantile_index ) )
+        floor = int( math.floor( quantile_index ) )
+        return (list_[ ceil ] + list_[ floor ] ) / 2
 
-def get_getdistr_results(bam_path, args):
+def get_getdistr_results(bam_path):
+    """
+    Work with the same reads as BWA:
+    " BWA estimates the insert size distribution per 256*1024 read pairs.
+    It first collects pairs of reads with both ends mapped with a single-end
+    quality 20 or higher and then calculates median (Q2), lower and higher 
+    quartile (Q1 and Q3). It estimates the mean and the variance of 
+    the insert size distribution from pairs whose insert sizes are within
+    interval [Q1-2(Q3-Q1), Q3+2(Q3-Q1)]. 
 
-    list_of_obs = []
-    list_of_isize = []
+    (The maximum distance x for a pair 
+    considered to be properly paired (SAM flag 0x2) is calculated by 
+    solving equation Phi((x-mu)/sigma)=x/L*p0, where mu is the mean, 
+    sigma is the standard error of the insert size distribution, 
+    L is the length of the genome, p0 is prior of anomalous pair 
+    and Phi() is the standard cumulative distribution function. 
+    For mapping Illumina short-insert reads to the human genome, 
+    x is about 6-7 sigma away from the mean. Quartiles, mean, variance 
+    and x will be printed to the standard error output.)
+    """
+
+    #list_of_obs = []
+
+
     with pysam.Samfile(bam_path, 'rb') as bam_file:
+        #contig dictionary
+        references = dict(zip(bam_file.references, map(lambda x: {'l':int(x),'o':[]},bam_file.lengths)))
+        #print references
         for alignedread in bam_file:
-            if alignedread.is_read1 and not alignedread.is_unmapped and not alignedread.mate_is_unmapped :  # only count an observation from a read pair once 
-                list_of_obs.append(alignedread.tlen)
-                #if len(alignedread.cigar) > 1:
-                #print alignedread.cigarstring
+            # only count high quality mappings with both reads mapped. an observation from a read pair once 
+            if alignedread.is_read2 and not alignedread.is_unmapped and not alignedread.mate_is_unmapped  and alignedread.mapq >= 20 and alignedread.flag in [147,163]:   
+                #print references[bam_file.getrname(alignedread.tid)]['o']
+                references[bam_file.getrname(alignedread.tid)]['o'].append( math.fabs(alignedread.tlen))
+
+    # # Infer isize distribution with the same reads as BWA:
+    # concatenate list of all observations:
+    all_observations = reduce( list.__add__, map(lambda x: x[1]['o'],references.iteritems()))
+    all_observations.sort()
+    Q1 = get_quantile(all_observations,0.25)
+    Q3 = get_quantile(all_observations,0.75)
+    low = Q1-2*(Q3-Q1)
+    high = Q3+2*(Q3-Q1)
+    print low, high
+    # list_of_obs = filter(lambda x: x >low and x < high, list_of_obs)
 
     # Put allowed soft clips to 0, because BWA does not align outside boundaries of the reference.
     # i.e. reeds need to be fully contained (mapped) to the contig in this case.
-    mean_est,std_dev_est = model.estimate_library_parameters(list_of_obs, 100, args.cont_len, soft=0)
-    mean_naive = sum(list_of_obs) / float(len(list_of_obs))
-    print(mean_est,std_dev_est, mean_naive, len(list_of_obs))
+    tot_mean_obs = 0
+    tot_stddev_obs = 0
+    tot_nr_obs = 0
+    mean_naive = 0
+    for reference,info in references.iteritems():
+        list_of_obs = filter(lambda x: x<= high and x >= low,  info['o']) # to work with the same reads as BWA
+        if len(list_of_obs) == 0:
+            continue
+        reference_length = info['l']
+        temp_mean_est,temp_std_dev_est = model.estimate_library_parameters(list_of_obs, 100, reference_length, soft=0)
+        tot_mean_obs += temp_mean_est*len(list_of_obs)
+        tot_stddev_obs += temp_std_dev_est*len(list_of_obs)
+        tot_nr_obs += len(list_of_obs)
+        mean_naive += sum(list_of_obs) 
+
+    mean_est = tot_mean_obs / float(tot_nr_obs)
+    mean_naive = mean_naive / float(tot_nr_obs)
+    std_dev_est = tot_stddev_obs / float(tot_nr_obs)
+
+    print(mean_est,std_dev_est, mean_naive, tot_nr_obs)
     #print list_of_obs
     return mean_est,std_dev_est, len(list_of_obs)
 
@@ -128,7 +190,7 @@ def main(args):
             bwa_means.append(bwa_mean)
             bwa_stddevs.append(bwa_stddev)
 
-            getdistr_mean,getdistr_stddev,nr_obs = get_getdistr_results(bam_path, args_object)
+            getdistr_mean,getdistr_stddev,nr_obs = get_getdistr_results(bam_path, args_object.cont_len)
             get_distr_means.append(getdistr_mean)
             get_distr_stddevs.append(getdistr_stddev)
             nr_obs_list.append(nr_obs)

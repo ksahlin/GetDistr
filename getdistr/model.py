@@ -83,7 +83,6 @@ def estimate_library_parameters(list_of_obs, r, a, soft=None):
     # formulas for mean and variance
     mu = sample_obs_sum / number_of_obs_sum
     sigma = sqrt(sample_obs_sum_sq /number_of_obs_sum - mu**2 )      #/ number_of_obs_sum_sq - mu**2)
-    print mu,sigma , sample_obs_sum_sq ,number_of_obs_sum
     return(mu,sigma)
 
 # def estimate_library_stddev(list_of_obs, mu, weighted_sum, r, a, soft=None):
