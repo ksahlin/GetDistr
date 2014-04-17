@@ -41,6 +41,14 @@ def create_bam(args):
 
 
 def get_bwa_results(bwa_file):
+    """
+    Gets the average BWA estimation of mean and standard deviation. 
+    BWA estimates mean and stddev in batches, a total exact mean 
+    can be derived here by linearity. However, to get the exact stddev,
+    we need the original samples which we cannot get. The approximation will 
+    however be OK if the means does not vary much across batches.
+    """
+    #TODO: gereralize this fumction to average over batches of several estimations
     bwa_output = ''
     for line in open(bwa_file, 'r'):
         bwa_output += line
@@ -60,6 +68,55 @@ def get_quantile(list_,quantile):
         ceil = int( math.ceil( quantile_index ) )
         floor = int( math.floor( quantile_index ) )
         return (list_[ ceil ] + list_[ floor ] ) / 2
+
+def MAD(list_,median):
+    mad = 0
+    absolute_deviations = map(lambda x: abs(median-x),list_)
+    absolute_deviations.sort()
+    mad = get_quantile(absolute_deviations,0.5)
+    return mad
+
+
+
+def flatten(lst):
+    for elem in lst:
+        if type(elem) in (tuple, list):
+            for i in flatten(elem):
+                yield i
+        else:
+            yield elem
+
+def getdistr_result(bam_path,references,low, high):
+    # Put allowed soft clips to 0, because BWA does not align outside boundaries of the reference.
+    # i.e. reeds need to be fully contained (mapped) to the contig in this case.
+    #weight_dict = model.get_possible_positions_dict(bam_file, 0, low, high)
+    list_of_all_obs = [references[x]['o'] for x in references]
+    list_of_all_obs = list(flatten(list_of_all_obs))
+    list_of_obs = filter(lambda x: x<= high and x >= low,  list_of_all_obs)
+    #print bam_file, references, list_of_obs 
+    mean_est,std_dev_est = model.estimate_library_parameters(bam_path,list_of_obs, low, high, soft=0)
+    # tot_mean_obs = 0
+    # tot_stddev_obs = 0
+    # tot_nr_obs = 0
+    # mean_naive = 0
+    # for reference,info in references.iteritems():
+    #     list_of_obs = filter(lambda x: x<= high and x >= low,  info['o']) # to work with the same reads as BWA
+    #     if len(list_of_obs) == 0:
+    #         continue
+    #     reference_length = info['l']
+    #     temp_mean_est,temp_std_dev_est = model.estimate_library_parameters(list_of_obs, 100, reference_length, soft=0)
+    #     tot_mean_obs += temp_mean_est*len(list_of_obs)
+    #     tot_stddev_obs += temp_std_dev_est*len(list_of_obs)
+    #     tot_nr_obs += len(list_of_obs)
+    #     mean_naive += sum(list_of_obs) 
+
+    # mean_est = tot_mean_obs / float(tot_nr_obs)
+    # mean_naive = mean_naive / float(tot_nr_obs)
+    # std_dev_est = tot_stddev_obs / float(tot_nr_obs)
+
+    # #print(mean_est,std_dev_est, mean_naive, tot_nr_obs)
+    return mean_est,std_dev_est
+
 
 def get_getdistr_results(bam_path):
     """
@@ -95,41 +152,27 @@ def get_getdistr_results(bam_path):
                 #print references[bam_file.getrname(alignedread.tid)]['o']
                 references[bam_file.getrname(alignedread.tid)]['o'].append( math.fabs(alignedread.tlen))
 
-    # # Infer isize distribution with the same reads as BWA:
-    # concatenate list of all observations:
     all_observations = reduce( list.__add__, map(lambda x: x[1]['o'],references.iteritems()))
     all_observations.sort()
+
+    # # Infer isize distribution with the same reads as BWA:
+    # concatenate list of all observations:
     Q1 = get_quantile(all_observations,0.25)
     Q3 = get_quantile(all_observations,0.75)
-    low = Q1-2*(Q3-Q1)
-    high = Q3+2*(Q3-Q1)
-    print low, high
-    # list_of_obs = filter(lambda x: x >low and x < high, list_of_obs)
 
-    # Put allowed soft clips to 0, because BWA does not align outside boundaries of the reference.
-    # i.e. reeds need to be fully contained (mapped) to the contig in this case.
-    tot_mean_obs = 0
-    tot_stddev_obs = 0
-    tot_nr_obs = 0
-    mean_naive = 0
-    for reference,info in references.iteritems():
-        list_of_obs = filter(lambda x: x<= high and x >= low,  info['o']) # to work with the same reads as BWA
-        if len(list_of_obs) == 0:
-            continue
-        reference_length = info['l']
-        temp_mean_est,temp_std_dev_est = model.estimate_library_parameters(list_of_obs, 100, reference_length, soft=0)
-        tot_mean_obs += temp_mean_est*len(list_of_obs)
-        tot_stddev_obs += temp_std_dev_est*len(list_of_obs)
-        tot_nr_obs += len(list_of_obs)
-        mean_naive += sum(list_of_obs) 
+    bwa_low = Q1-2*(Q3-Q1)
+    bwa_high = Q3+2*(Q3-Q1)
+    #print bwa_low, bwa_high
+    mean_bwa, stddev_bwa = getdistr_result(bam_path,references,bwa_low, bwa_high)
 
-    mean_est = tot_mean_obs / float(tot_nr_obs)
-    mean_naive = mean_naive / float(tot_nr_obs)
-    std_dev_est = tot_stddev_obs / float(tot_nr_obs)
+    # Infer isize distribution with the same reads as picard:
+    median = get_quantile(all_observations,0.5)
+    mad = MAD(all_observations,median)
+    #print mad
+    mean_picard, stddev_picard = getdistr_result(bam_path,references,median - 10*mad, median + 10*mad)
 
-    print(mean_est,std_dev_est, mean_naive, tot_nr_obs)
-    #print list_of_obs
-    return mean_est,std_dev_est, len(list_of_obs)
+    #print str(mean_bwa),str(stddev_bwa.real), str(mean_picard),str(stddev_picard.real)
+    return str(mean_bwa),str(stddev_bwa.real), str(mean_picard),str(stddev_picard.real)
 
 def print_format(file_, parameters, bwa_means,bwa_stddevs,get_distr_means,get_distr_stddevs,nr_obs_list):
     n = parameters[-1] 

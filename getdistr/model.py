@@ -8,6 +8,7 @@ Created on Sep 20, 2013
 import warnings
 
 from scipy import stats
+import pysam
 
 from mpmath import *
 mp.dps = 50 # decimal digits of precision
@@ -68,14 +69,40 @@ def w(o, r, a, b=None, s=None, infer_lib_mean=False):
 
     return(min(w_fcn))
 
-def estimate_library_parameters(list_of_obs, r, a, soft=None):
+
+def get_possible_positions_dict(bam_file, softclipped, low, high):
+    """
+    This function could be highly optimized.
+    """
+    ref_lengths = sorted(map(lambda x: int(x),bam_file.lengths), reverse=True)
+    print ref_lengths
+    position_dict = {}
+    print low, high
+    if low < 0:
+        low = 0 
+    i = low
+    while i <= high:
+        position_dict[i] = 0
+        j = 0
+        while j < len(ref_lengths) and i <= ref_lengths[j]:
+            position_dict[i] += w(i, 0, ref_lengths[j], s=softclipped, infer_lib_mean=True)
+            j += 1
+
+        i += 1
+
+    #print position_dict
+    return position_dict
+
+def estimate_library_parameters(bam_path, list_of_obs, low, high, soft=None):
     sample_obs_sum = 0
     sample_obs_sum_sq = 0
     number_of_obs_sum = 0
     number_of_obs_sum_sq = 0
+    with pysam.Samfile(bam_path, 'rb') as bam_file:
+        w = get_possible_positions_dict(bam_file, soft, low, high)
 
     for o in list_of_obs:
-        weight = float(w(o, r, a, s=soft, infer_lib_mean=True))
+        weight = float(w[o])
         sample_obs_sum += o / weight
         number_of_obs_sum += 1 / weight
         sample_obs_sum_sq  += o**2/weight #(o / weight)**2
