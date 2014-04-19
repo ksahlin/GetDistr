@@ -4,7 +4,7 @@ Created on Sep 20, 2013
 @author: ksahlin
 '''
 
-
+import sys
 import warnings
 
 from scipy import stats
@@ -28,29 +28,48 @@ def normpdf(x, mu, sigma):
     y = (1 / mpf((sqrt(2 * pi) * sigma)) * exp(mpf(-u * u / 2)))
     return y
 
-def w(o, r, a, b=None, s=None, infer_lib_mean=False):
+def w(alignment, r, a, s, b=None, infer_lib_mean=False):
     '''
         Calculate the weight for a given observation.
 
         Parameters:
 
-        o       -- An observation (an integer)
-        r       -- The read length.
+        alignment       -- Position and number of softclipped bases
+                        for an alignment. A tuple with three integers 
+                        (observation, observed inner softclipped bases,
+                            observed outer softclipped bases)
+        r               -- The read length.
+        a               --reference length 
 
 
-        Returns the weight that this observation has (a number between 0 and 1).
+        Returns the weight that this observation has.
 
     '''
-    ##
-    # If no softclipping parameter is given. Default number 
-    # of allowed softclipped bases to half of the readlength.
-    s = s if s != None else r / 2
+
+    o, s_inner, s_outer = alignment[0],alignment[1], alignment[2]
+
+    ## 
+    # Check so that number of allowed softclipped bases 
+    # (specified by user) is greater than the obsered 
+    # softclipped bases (entered by the user)
+    if 2*s < s_inner or 2*s < s_outer:
+        warnings.warn("Warning: Observed more softclipped bases (inner softclipped: {0},\
+                     outer softclipped: {1} bp) in the alignemnt tuple than what is \
+                      specified to be allowed (2*{2} bp) with parameter 's'. please \
+                      reconsider this parameter".format(s_inner,s_outer,s))
+        sys.exit()
+
+
     w_fcn = []
+
+    s_param_inner = 2*s - s_inner
+    s_param_outer = 2*s - s_outer
+
     ##
     # Weight function in the case where we want to estimate the original library mean
     # (full original distribution) from alignments of paired reads onto a contig
     if infer_lib_mean:
-        return(max(a - (o - 2 * s) + 1, 0))
+        return(max(a - (o - s_param_outer) + 1, 0))
 
 
     ##
@@ -58,14 +77,22 @@ def w(o, r, a, b=None, s=None, infer_lib_mean=False):
     # observations coming from our library with truncation and skewness 
     # (e.g. over insertions or scaffold gaps).
 
-    s = s if s != None else r / 2  # if softclipped is not set softclipped to half of read length
 
-    w_fcn.append(max(o - 2 * (r - s) + 1, 0))
+    # inner boundary
+    w_fcn.append(max(o - 2 *(r-s) + 1, 0))
+
     if b:
-        w_fcn.append(max(a + b - (o - 2 * s) + 1, 0))
+        # outer boundary
+        w_fcn.append(max(a + b - (o -  s_param_outer) + 1, 0))
+        # shorter ref
+        # NOTE: If the smallest reference sequence here is smaller than
+        # the read length, this formula is incorrect and we need keep track
+        # of separate softclippes between the reads. Ref seq < read length is
+        # however not recommented to use this model on as estimation have hight 
+        # unceratianty so we therefore do not treat this case. 
         w_fcn.append(max(min(a, b) - (r - s) + 1, 0))
     else:
-        w_fcn.append(max(a - (o - 2 * s) + 1, 0))
+        w_fcn.append(max(a - o + s_param_outer + 1, 0))
 
     return(min(w_fcn))
 
@@ -240,33 +267,46 @@ class NormalModel(object):
 
         return(max(z_u,z_l))
 
+
     def run_GapEst(self, list_of_obs, a, b=None):
+        mean_obs = float(sum(list_of_obs))/len(list_of_obs)
         if b == None:
             # GapEst only works with two reference sequences
             # Just split a into two sequences. Hopefully a is long
             # enough compared to the mean and std dev of the library
             # so that this does not affect the result too much.
+            if a < self.mean +6*self.sigma:
+                warnings.warn("Warning: Unsafe to run GapEst on one reference sequence\
+                (it is implemented for two reference sequences) that is shorter than \
+                    2*mean + 6sigma of library insert size. Use infer_mean_fast instead.")
+                sys.exit()  
+
+            # reference is long enough for safe estimations            
             b = a/2
             a = a/2
-        mean_obs = float(sum(list_of_obs))/len(list_of_obs)
-        # gapest does not handle softclipping so we send in self.r - self.s as the effective read length
-        return param_est.GapEstimator(self.mu, self.sigma, self.r - self.s, mean_obs, a, b)
+            mean_obs = float(sum(list_of_obs))/len(list_of_obs)
+            # gapest does not handle softclipping so we send in self.r - self.s as the effective read length
+            return param_est.GapEstimator(self.mu, self.sigma, self.r - self.s, mean_obs, a, b)
+        else:
+            return param_est.GapEstimator(self.mu, self.sigma, self.r - self.s, mean_obs, a, b)
 
     def infer_variance(self):
         raise NotImplementedError
 
-    def get_likelihood_value(self, z, list_of_obs, a, b=None, coverage = False,n = False, coverage_model = False):
+    def get_likelihood_value(self, z, list_of_alignmet_tuples, a, b=None, coverage = False,n = False, coverage_model = False):
         '''
         This function gives back a single likelihood value from the likelihood function
             parameters
             __________
-            @param list_of_obs:         A list of observations
+            @param list_of_obs_tuples:         A list of observations
             @param a:                   Reference sequence length
             @param precision: 
             @ argument coverage:        Mean coverage.
             @ argument coverage_model:  The assumed coverage distribution around the mean. Valid strings are 'Uniform',
                                         'NegBin' or 'Poisson'.
         '''
+        list_of_obs = map(lambda x : x[0], list_of_alignmet_tuples)
+
         if coverage:
             n = len(list_of_obs)
             if not coverage_model:
@@ -277,16 +317,22 @@ class NormalModel(object):
         norm_const = 0
         for t in range(z + 2 * (self.r - self.s), self.mu + 7 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
             #norm_const += w(t - z , self.r, a, b, self.s) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
-            norm_const += w(t - z , self.r, a, b, self.s) * normpdf(t + 0.5, self.mu, self.sigma)
-        #print z, norm_const #, norm_const2
+            norm_const += w((t - z, 0, 0) , self.r, a, self.s, b) * normpdf(t + 0.5, self.mu, self.sigma)
+
+        # eventual softclipped outer reads, they will have the same observation "a" but be oof different
+        #lengths due to outer softclipped bases
+        if a < self.mu + 7 * self.sigma:
+            for i in range(1, min(2*self.s, (self.mu + 7 * self.sigma - a ) )):
+                norm_const += w((a, 0, i) , self.r, a, self.s, b) * normpdf(z+a+i + 0.5, self.mu, self.sigma)
+
 
         ##
         # calculate the nominator (relative frequency given a gap)
         # in log() format
         log_p_x_given_z = 0
-        for o in list_of_obs:
-            weight = w(o , self.r, a, b, self.s)
-            lib_dist = normpdf(o + z + 0.5, self.mu, self.sigma)
+        for o,s_inner,s_outer in list_of_alignmet_tuples:
+            weight = w( (o,s_inner,s_outer) , self.r, a, self.s, b)
+            lib_dist = normpdf(o + s_outer + z + 0.5, self.mu, self.sigma)
             #print z, weight, lib_dist, norm_const
             log_p_x_given_z += log(weight) + log(lib_dist) - log(norm_const)
 
