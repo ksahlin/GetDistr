@@ -275,7 +275,7 @@ class NormalModel(object):
             # Just split a into two sequences. Hopefully a is long
             # enough compared to the mean and std dev of the library
             # so that this does not affect the result too much.
-            if a < self.mean +6*self.sigma:
+            if a < 2*self.mu +6*self.sigma:
                 warnings.warn("Warning: Unsafe to run GapEst on one reference sequence\
                 (it is implemented for two reference sequences) that is shorter than \
                     2*mean + 6sigma of library insert size. Use infer_mean_fast instead.")
