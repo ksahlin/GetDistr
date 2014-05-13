@@ -57,12 +57,13 @@ class Param(object):
     (read_len - softclipped) ultimately means the number ofbases from a read that needs to reside
     within a contig in order to be considered as mapped to that contig.
     """
-    def __init__(self, mean, stddev, cov, read_len, softclipped):
+    def __init__(self, mean, stddev, cov, read_len, s_inner, s_outer):
         self.mean = mean
         self.stddev = stddev
         self.read_len = read_len
         self.cov = cov
-        self.softclipped = softclipped
+        self.s_inner = s_inner
+        self.s_outer = s_outer
         self.readfrequency = 2 * self.read_len / self.cov
 
 
@@ -79,13 +80,13 @@ def mean_span_coverage(len1, len2, d, param):
     # therefore we count with gap = max(d,0)
     gap = max(d, 0)
     #Specifying input arguments
-    b1 = (len1 + len2 + gap + 2 * param.softclipped - param.mean) / std_dev
-    a1 = (max(len1, len2) + gap + (param.read_len - param.softclipped) - param.mean) / std_dev
-    b2 = (min(len1, len2) + gap + (param.read_len - param.softclipped) - param.mean) / std_dev
-    a2 = (gap + 2 * (param.read_len - param.softclipped) - param.mean) / std_dev
+    b1 = (len1 + len2 + gap + 2 * param.s_outer - param.mean) / std_dev
+    a1 = (max(len1, len2) + gap + (param.read_len - param.s_inner) - param.mean) / std_dev
+    b2 = (min(len1, len2) + gap + (param.read_len - param.s_inner) - param.mean) / std_dev
+    a2 = (gap + 2 * (param.read_len - param.s_inner) - param.mean) / std_dev
     def Part(a, b):
-        expr1 = (min(len1, len2) - (param.read_len - param.softclipped)) / param.readfrequency * normcdf(a, 0, 1)
-        expr2 = -(-param.softclipped) / param.readfrequency * normcdf(b, 0, 1)
+        expr1 = (min(len1, len2) - (param.read_len - param.s_inner)) / param.readfrequency * normcdf(a, 0, 1)
+        expr2 = -(-param.s_inner) / param.readfrequency * normcdf(b, 0, 1)
         expr3 = (b * std_dev) / param.readfrequency * (normcdf(b, 0, 1) - normcdf(a, 0, 1))
         expr4 = (std_dev / param.readfrequency) * (normpdf(b, 0, 1) - normpdf(a, 0, 1))
         value = expr1 + expr2 + expr3 + expr4
@@ -110,5 +111,8 @@ if __name__ == "__main__":
 
     args = arg_parser.parse_args()
 
-    param = Param(args.mean, args.stddev, args.cov, args.readlen, args.soft)
+    ##
+    # inner and outer softclipps are set to the same value as this is most likely for all applicatons
+    
+    param = Param(args.mean, args.stddev, args.cov, args.readlen, args.soft, args.soft)
     print mean_span_coverage(args.len1, args.len2, args.d, param)

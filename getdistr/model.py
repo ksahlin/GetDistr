@@ -28,7 +28,7 @@ def normpdf(x, mu, sigma):
     y = (1 / mpf((sqrt(2 * pi) * sigma)) * exp(mpf(-u * u / 2)))
     return y
 
-def w(alignment, r, a, s, b=None, infer_lib_mean=False):
+def w(alignment, r, a, s_inner,s_outer, b=None, infer_lib_mean=False, breakdancer=False):
     '''
         Calculate the weight for a given observation.
 
@@ -46,24 +46,25 @@ def w(alignment, r, a, s, b=None, infer_lib_mean=False):
 
     '''
 
-    o, s_inner, s_outer = alignment[0],alignment[1], alignment[2]
+    o, s_inner_obs, s_outer_obs = alignment[0],alignment[1], alignment[2]
 
     ## 
     # Check so that number of allowed softclipped bases 
     # (specified by user) is greater than the obsered 
     # softclipped bases (entered by the user)
-    if 2*s < s_inner or 2*s < s_outer:
+    if 2*s_inner < s_inner_obs or 2*s_outer < s_outer_obs:
         warnings.warn("Warning: Observed more softclipped bases (inner softclipped: {0},\
                      outer softclipped: {1} bp) in the alignemnt tuple than what is \
-                      specified to be allowed (2*{2} bp) with parameter 's'. please \
-                      reconsider this parameter".format(s_inner,s_outer,s))
+                      specified to be allowed ({1} inner and {2} outer total bp) with \
+                      parameters 's_inner' and 's_outer'. Please \
+                      reconsider this parameter".format(s_inner_obs,s_outer_obs,s_inner,s_outer))
         sys.exit()
 
 
     w_fcn = []
 
-    s_param_inner = 2*s - s_inner
-    s_param_outer = 2*s - s_outer
+    s_param_inner = 2*s_inner - s_inner_obs
+    s_param_outer = 2*s_outer - s_outer_obs
 
     ##
     # Weight function in the case where we want to estimate the original library mean
@@ -79,7 +80,13 @@ def w(alignment, r, a, s, b=None, infer_lib_mean=False):
 
 
     # inner boundary
-    w_fcn.append(max(o - 2 *(r-s) + 1, 0))
+    w_fcn.append(max(o - 2 *(r-s_inner) + 1, 0))
+
+    if breakdancer:
+        if o > a:
+            return 0
+        else:
+            return min(w_fcn)
 
     if b:
         # outer boundary
@@ -90,7 +97,7 @@ def w(alignment, r, a, s, b=None, infer_lib_mean=False):
         # of separate softclippes between the reads. Ref seq < read length is
         # however not recommented to use this model on as estimation have hight 
         # unceratianty so we therefore do not treat this case. 
-        w_fcn.append(max(min(a, b) - (r - s) + 1, 0))
+        w_fcn.append(max(min(a, b) - (r - s_inner) + 1, 0))
     else:
         w_fcn.append(max(a - o + s_param_outer + 1, 0))
 
@@ -161,11 +168,14 @@ class NormalModel(object):
 
     '''
 
-    def __init__(self, mu, sigma, r, s=None):
+    def __init__(self, mu, sigma, r, s_inner=None,s_outer=None,breakdancer=False):
         self.mu = mu
         self.sigma = sigma
         self.r = r
-        self.s = s if s != None else r / 2
+        self.s_inner = s_inner if s_inner != None else r / 2
+        self.s_outer = s_outer if s_outer != None else r / 2
+        self.breakdancer = breakdancer
+
 
     def expected_mean(self, z, a, b=None):
         '''
@@ -174,11 +184,11 @@ class NormalModel(object):
         '''
         E_x_given_z = 0
         norm_const = 0
-        for t in range(z + 2 * (self.r - self.s), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
-            norm_const += w(t - z , self.r, a, b, self.s) * normpdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
+        for t in range(z + 2 * (self.r - self.s_inner), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
+            norm_const += w(t - z , self.r, a, self.s_inner, self.s_outer, b=b) * normpdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
 
-        for y in range(2 * (self.r - self.s), self.mu + 6 * self.sigma - z): # iterate over possible observation span
-            weight = w(y , self.r, a, b, self.s)
+        for y in range(2 * (self.r - self.s_inner), self.mu + 6 * self.sigma - z): # iterate over possible observation span
+            weight = w(y , self.r, a, self.s_inner, self.s_outer, b=b)
             w_times_f = weight * normpdf(z + y + 0.5, self.mu, self.sigma) # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
             E_x_given_z += (y + z) * w_times_f / norm_const
         return(E_x_given_z)
@@ -191,11 +201,11 @@ class NormalModel(object):
         E_x_given_z = self.expected_mean(z, a, b)
         E_x_square_given_z = 0
         norm_const = 0
-        for t in range(z + 2 * (self.r - self.s), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
-            norm_const += w(t - z , self.r, a, b, self.s) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
+        for t in range(z + 2 * (self.r - self.s_inner), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
+            norm_const += w(t - z , self.r, a, self.s_inner,self.s_outer,  b) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
 
-        for y in range(2 * (self.r - self.s), self.mu + 6 * self.sigma - z): # iterate over possible observation span
-            weight = w(y , self.r, a, b, self.s)
+        for y in range(2 * (self.r - self.s_inner), self.mu + 6 * self.sigma - z): # iterate over possible observation span
+            weight = w(y , self.r, a,  self.s_inner, self.s_outer, b = b)
             w_times_f = weight * stats.norm.pdf(z + y + 0.5, self.mu, self.sigma) # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
             E_x_square_given_z += (y + z) ** 2 * w_times_f / norm_const
 
@@ -247,7 +257,7 @@ class NormalModel(object):
 
         #do binary search among limited range of values
         
-        z_upper= self.mu + 3 * self.sigma - (2 * (self.r - self.s))
+        z_upper= self.mu + 3 * self.sigma - (2 * (self.r - self.s_inner))
         z_lower=-3 * self.sigma
         z_u = int((z_upper+z_lower)/2.0 + precision)
         z_l = int((z_upper+z_lower)/2.0)
@@ -285,10 +295,12 @@ class NormalModel(object):
             b = a/2
             a = a/2
             mean_obs = float(sum(list_of_obs))/len(list_of_obs)
-            # gapest does not handle softclipping so we send in self.r - self.s as the effective read length
-            return param_est.GapEstimator(self.mu, self.sigma, self.r - self.s, mean_obs, a, b)
+            # gapest does not handle softclipping so we send in self.r - self.s_inner as the effective read length
+            # note that this in not correct for short reference sequences, then we wold want to send in
+            # self.s_inner. This is not treated here however and in general s_inner = s_outer
+            return param_est.GapEstimator(self.mu, self.sigma, self.r - self.s_inner, mean_obs, a, b)
         else:
-            return param_est.GapEstimator(self.mu, self.sigma, self.r - self.s, mean_obs, a, b)
+            return param_est.GapEstimator(self.mu, self.sigma, self.r - self.s_inner, mean_obs, a, b)
 
     def infer_variance(self):
         raise NotImplementedError
@@ -315,29 +327,28 @@ class NormalModel(object):
         ##
         # calculate the normalization constant for a given gap length z
         norm_const = 0
-        for t in range(z + 2 * (self.r - self.s), self.mu + 7 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
-            #norm_const += w(t - z , self.r, a, b, self.s) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
-            norm_const += w((t - z, 0, 0) , self.r, a, self.s, b) * normpdf(t + 0.5, self.mu, self.sigma)
-
-        # eventual softclipped outer reads, they will have the same observation "a" but be oof different
+        for t in range(z + 2 * (self.r - self.s_inner), self.mu + 7 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
+            #norm_const += w(t - z , self.r, a, self.s_inner, self.s_outer, b=b) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
+            norm_const += w((t - z, 0, 0) , self.r, a, self.s_inner, self.s_outer, b=b, breakdancer=self.breakdancer) * normpdf(t + 0.5, self.mu, self.sigma)
+        # eventual softclipped outer reads, they will have the same observation "a" but be of different
         #lengths due to outer softclipped bases
         if a < self.mu + 7 * self.sigma:
-            for i in range(1, min(2*self.s, (self.mu + 7 * self.sigma - a ) )):
-                norm_const += w((a, 0, i) , self.r, a, self.s, b) * normpdf(z+a+i + 0.5, self.mu, self.sigma)
+            for i in range(1, min(2*self.s_outer, (self.mu + 7 * self.sigma - a ) )):
+                norm_const += w((a, 0, i) , self.r, a, self.s_inner,self.s_outer, b=b) * normpdf(z+a+i + 0.5, self.mu, self.sigma)
 
 
         ##
         # calculate the nominator (relative frequency given a gap)
         # in log() format
         log_p_x_given_z = 0
-        for o,s_inner,s_outer in list_of_alignmet_tuples:
-            weight = w( (o,s_inner,s_outer) , self.r, a, self.s, b)
-            lib_dist = normpdf(o + s_outer + z + 0.5, self.mu, self.sigma)
+        for o,s_inner_obs,s_outer_obs in list_of_alignmet_tuples:
+            weight = w( (o,s_inner_obs,s_outer_obs) , self.r, a, self.s_inner, self.s_outer, b=b, breakdancer=self.breakdancer)
+            lib_dist = normpdf(o + s_outer_obs + z + 0.5, self.mu, self.sigma)
             #print z, weight, lib_dist, norm_const
             log_p_x_given_z += log(weight) + log(lib_dist) - log(norm_const)
 
         if coverage:
-            p_n_given_z = self.coverage_probability(n, a, self.mu, self.sigma, z, coverage, self.r, self.s, b, coverage_model)
+            p_n_given_z = self.coverage_probability(n, a, self.mu, self.sigma, z, coverage, self.r, self.s_inner,self.s_outer, b, coverage_model)
             log_p_n_given_z = log(p_n_given_z)/n
             return log_p_x_given_z + log_p_n_given_z
         else:
@@ -381,13 +392,13 @@ class NormalModel(object):
         # This loop iterates over all possible gaps z, we want to see the ML estimation of
         # The interesting range is in general not above  mean + 3*stddev
 
-        for z in range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s)), precision): 
+        for z in range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s_inner)), precision): 
             likelihood_curve.append((z,self.get_likelihood_value(z, list_of_obs, a, b, coverage,n , coverage_model)))
 
         return(likelihood_curve)
 
 
-    def coverage_probability(self,nr_obs, a, mean_lib, stddev_lib,z, coverage_mean, read_len, softclipped, b=None, coverage_model = False):
+    def coverage_probability(self,nr_obs, a, mean_lib, stddev_lib,z, coverage_mean, read_len, s_inner,s_outer, b=None, coverage_model = False):
         ''' Distribution P(o|c,z) for prior probability over coverage.
             This probability distribution is implemented as an poisson 
             distribution.
@@ -407,7 +418,7 @@ class NormalModel(object):
             a = a/2
             b = a/2
 
-        param = Param(mean_lib, stddev_lib, coverage_mean, read_len, softclipped)
+        param = Param(mean_lib, stddev_lib, coverage_mean, read_len, s_inner,s_outer)
         lambda_ = mean_span_coverage(a, b, z, param)
 
         if coverage_model == 'Poisson':
