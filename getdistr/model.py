@@ -93,7 +93,7 @@ def w(alignment, r, a, s_inner,s_outer, b=None, infer_lib_mean=False, breakdance
         w_fcn.append(max(a + b - (o -  s_param_outer) + 1, 0))
         # shorter ref
         # NOTE: If the smallest reference sequence here is smaller than
-        # the read length, this formula is incorrect and we need keep track
+            # the read length, this formula is incorrect and we need keep track
         # of separate softclippes between the reads. Ref seq < read length is
         # however not recommented to use this model on as estimation have hight 
         # unceratianty so we therefore do not treat this case. 
