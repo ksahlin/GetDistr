@@ -4,6 +4,7 @@ Created on Sep 18, 2013
 @author: ksahlin
 '''
 
+import argparse
 
 # class PositionStats:
 # 	def get_spanning_reads(self, position, read_length, read_path):
@@ -28,6 +29,7 @@ Created on Sep 18, 2013
 import sys
 import pysam
 from scipy.stats import norm
+import math
 
 
 class ReadContainer(object):
@@ -48,18 +50,21 @@ class ReadContainer(object):
 
 	
 	def calc_insert_pvalue(self,expected_insert,sigma):
-		calculate correctly!!
-		#print len(self.reads)
-		if len(self.reads) == 0:
-			return 1 # return a non significant p-value
+		n = len(self.reads)
+		if n == 0:
+			return 0.5 # return a non significant p-value
 	    #insert size
 		tot_insert = 0
 		for read in self.reads:
 			tot_insert += abs(read.tlen)
-		mean_insert_obs = tot_insert/float(len(self.reads))  
-		print mean_insert_obs
-		z = (mean_insert_obs - expected_insert)/float(sigma) # z-test
-		return norm.cdf(z,expected_insert,sigma)
+		mean_insert_obs = tot_insert/float(n)  
+		#print mean_insert_obs
+
+		z = (mean_insert_obs - expected_insert)/(float(sigma)/math.sqrt(n)) # z-statistic
+		#print mean_insert_obs, z
+		p_value_upper_area = norm.sf(z) 
+		#print z, p_value
+		return p_value_upper_area
 
 
 def ParseBAMfile(bamfile,read_length):
@@ -79,6 +84,11 @@ def ParseBAMfile(bamfile,read_length):
 		print ref_lengths[0]
 
 	   	for read in sorted_bamfile:
+		Make sure that bamfile is sorted so that mates come after eachotern
+		Throw assertion error here otherwise.
+		use for read1,read2 in zip(bam1,bam2,2) to iterate over the samfiles simultaneosly
+		to use last aligned coordinate of mate instead of read_length (in case of softclipps)!
+
 	   		#print read.tlen,read.is_proper_pair,read.tlen, read.aend,read.pnext
 	   		counter += 1
 			if counter % 5000 == 0:
@@ -112,19 +122,29 @@ def ParseBAMfile(bamfile,read_length):
 
 
 
-def GetBasePvalue(container):
-	for bp in range(100):
+def GetBasePvalue(container,mu,sigma):
+	tot_mean = 0
+	exp_insert =  mu+ (sigma**2)/(mu + 1)
+	for bp in range(100000):
 		#print container[bp]
 		#print container[bp].calc_insert_pvalue
-		p_val = container[bp].calc_insert_pvalue(650,100)
-		print p_val
-		if p_val < 0.1:
-		    print 'Significant position insert size reads: Pos: ',bp, ' p-value = ', p_val, 'nr of reads:', len(container[bp].reads)
+		p_val_upper_area = container[bp].calc_insert_pvalue(exp_insert,100)
+		#print p_val
+		tot_insert = 0
+		if len(container[bp].reads) > 0:
+			for read in container[bp].reads:
+				tot_insert += abs(read.tlen)
+			tot_mean += tot_insert/len(container[bp].reads)
+		if p_val_upper_area < 0.01:
+			print 'Significant large position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', tot_insert/len(container[bp].reads)
+		if p_val_upper_area > 0.99:
+			print 'Significant small position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', tot_insert/len(container[bp].reads)
 
 
-def main(bam_path):
-    container = ParseBAMfile(bam_path,50)
-    GetBasePvalue(container)
+
+def main(args):
+    container = ParseBAMfile(args.bampath,50)
+    GetBasePvalue(container,args.mean,args.stddev)
 
 
 
@@ -232,10 +252,17 @@ def main(bam_path):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print( "Usage: p_value_check samfile1" )
-        exit( 1 )
-    main(sys.argv[1])
+    ##
+    # Take care of input
+	parser = argparse.ArgumentParser(description="Infer variants with simple p-value test using theory of GetDistr - proof of concept.")
+	parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
+	parser.add_argument('mean', type=int, help='mean insert size. ')
+	parser.add_argument('stddev', type=int, help='Standard deviation of insert size ')
+
+
+	args = parser.parse_args()
+	main(args)
+
 
 
         
