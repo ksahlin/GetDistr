@@ -31,6 +31,8 @@ import pysam
 from scipy.stats import norm
 import math
 
+from getdistr import model
+
 
 class ReadContainer(object):
 	"""docstring for ReadContainer"""
@@ -48,28 +50,51 @@ class ReadContainer(object):
 		"Print reads on bam format "
 		pass
 
+	def calc_observed_insert(self):
+		n = len(self.reads)
+		if n == 0:
+			return 0
+
+		isize_obs = 0
+		modulo = 0
+		for read1,read2 in zip(self.reads[:-1],self.reads[1:]):
+			if modulo == 1:
+				modulo = 0
+				continue
+			else: 
+		   		assert read1.tlen == - read2.tlen
+		   		assert read1.is_proper_pair == read2.is_proper_pair
+		   		isize_obs += abs(read1.tlen)
+				modulo = 1
+
+		return isize_obs / float(len(self.reads)/2)
+
 	
-	def calc_insert_pvalue(self,expected_insert,sigma):
+	def calc_pvalue(self,expected_insert,sigma):
 		n = len(self.reads)
 		if n == 0:
 			return 0.5 # return a non significant p-value
 	    #insert size
-		tot_insert = 0
-		for read in self.reads:
-			tot_insert += abs(read.tlen)
-		mean_insert_obs = tot_insert/float(n)  
+		mean_insert_obs = self.calc_observed_insert()
+		# tot_insert = 0
+		# for read in self.reads:
+		# 	tot_insert += abs(read.tlen)
+		# mean_insert_obs = tot_insert/float(n)  
 		#print mean_insert_obs
 
 		z = (mean_insert_obs - expected_insert)/(float(sigma)/math.sqrt(n)) # z-statistic
-		#print mean_insert_obs, z
 		p_value_upper_area = norm.sf(z) 
 		#print z, p_value
 		return p_value_upper_area
 
 
 def ParseBAMfile(bamfile,read_length):
-	with pysam.Samfile(bamfile, 'rb') as sorted_bamfile:
-		ref_lengths = sorted_bamfile.lengths
+	with pysam.Samfile(bamfile, 'rb') as bam:
+	# bam = pysam.Samfile(bamfile, 'rb')
+	#bam2 = pysam.Samfile(bamfile, 'rb')
+
+
+		ref_lengths = bam.lengths
 
 		##
 		# create a container holding all interesting reads 
@@ -82,37 +107,45 @@ def ParseBAMfile(bamfile,read_length):
 		for i in range(ref_lengths[0]): # assumes only one chromosome, i.e. a single reference strand
 			container[i] = ReadContainer(i)
 		print ref_lengths[0]
-
-	   	for read in sorted_bamfile:
-		Make sure that bamfile is sorted so that mates come after eachotern
-		Throw assertion error here otherwise.
-		use for read1,read2 in zip(bam1,bam2,2) to iterate over the samfiles simultaneosly
-		to use last aligned coordinate of mate instead of read_length (in case of softclipps)!
+	   	
+	   	for read1 in bam:
+	   		read2 = next(bam)
+			#print read1
+			#print read2
+			#print read1.tlen,read2.tlen
+	   		assert read1.tlen == - read2.tlen
+	   		assert read1.is_proper_pair == read2.is_proper_pair
+		# Make sure that bamfile is sorted so that mates come after eachotern
+		# Throw assertion error here otherwise.
+		# use for read1,read2 in zip(bam1,bam2,2) to iterate over the samfiles simultaneosly
+		# to use last aligned coordinate of mate instead of read_length (in case of softclipps)!
 
 	   		#print read.tlen,read.is_proper_pair,read.tlen, read.aend,read.pnext
 	   		counter += 1
-			if counter % 5000 == 0:
+			if counter % 20000 == 0:
 				print 'Processed ', counter, 'reads.'
+				#break
 
-	   		if not read.is_proper_pair or read.is_read2: # or len( read.cigar ) > 1:
+	   		if not read1.is_proper_pair: # or len( read.cigar ) > 1:
 	   			counter2 +=1
 	   			continue
 
 
 
 			#print inner_start_pos, inner_end_pos
-			if read.tlen > 0:
-				inner_start_pos = read.aend
-				inner_end_pos = read.pnext
+			if read1.tlen > 0:
+				inner_start_pos = read1.aend
+				inner_end_pos = read2.pos
 				for pos in range(inner_start_pos,inner_end_pos):
-					container[pos].add_read(read)
-
+					container[pos].add_read(read1)
+					container[pos].add_read(read2)
 			else:
-				inner_start_pos = read.pnext + read_length
-				inner_end_pos = read.pos
+				inner_start_pos = read2.aend
+				inner_end_pos = read1.pos
 
-				for pos in range(inner_end_pos,inner_start_pos):
-					container[pos].add_read(read)
+				for pos in range(inner_start_pos,inner_end_pos):
+					container[pos].add_read(read1)
+					container[pos].add_read(read2)
 
 
 
@@ -120,27 +153,85 @@ def ParseBAMfile(bamfile,read_length):
 	return container
 
 
+class BreakPointContainer(object):
+	"""docstring for BreakPointContainer"""
+	def __init__(self):
+		super(BreakPointContainer, self).__init__()
+		self.clusters = []
+
+
+	def add_bp_to_cluster(self,pos,dist_thresh):
+		new_cluster = 1
+		for cluster in self.clusters:
+			min_pos = min(cluster)
+			max_pos = max(cluster)
+			print min_pos,max_pos
+			if pos <= max_pos + dist_thresh and pos >= min_pos - dist_thresh:
+				new_cluster = 0
+				cluster.append(pos)
+				break
+
+		if new_cluster:
+			self.clusters.append([pos])
+
+
+		if len(self.clusters) == 0:
+			self.clusters.append([pos])
+
+	# def __str__(self):
+	# 	for cluster in self.clusters:
+	# 		print cluster
 
 
 def GetBasePvalue(container,mu,sigma):
 	tot_mean = 0
-	exp_insert =  mu+ (sigma**2)/(mu + 1)
-	for bp in range(100000):
+	nr_obs =0
+	est = model.NormalModel(mu,sigma,100,s_inner=0)
+	# exp_stddev =  lagg till test av forvantad standard avvikelse
+	exp_insert = float(est.expected_mean(0,100000))
+	#exp_insert =  mu+ (sigma**2)/float(mu + 1)
+
+	print exp_insert, type(exp_insert)
+
+
+	##
+	# need to select a consensus loci for a breakpoint
+	# using only insert size 
+	sv_container = BreakPointContainer()
+
+
+	for bp in range(10000):
 		#print container[bp]
 		#print container[bp].calc_insert_pvalue
-		p_val_upper_area = container[bp].calc_insert_pvalue(exp_insert,100)
+		p_val_upper_area = container[bp].calc_pvalue(exp_insert,sigma)
 		#print p_val
-		tot_insert = 0
-		if len(container[bp].reads) > 0:
-			for read in container[bp].reads:
-				tot_insert += abs(read.tlen)
-			tot_mean += tot_insert/len(container[bp].reads)
-		if p_val_upper_area < 0.01:
-			print 'Significant large position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', tot_insert/len(container[bp].reads)
-		if p_val_upper_area > 0.99:
-			print 'Significant small position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', tot_insert/len(container[bp].reads)
+		# tot_insert = 0
+		# if len(container[bp].reads) > 0:
+		# 	for read in container[bp].reads:
+		# 		tot_insert += abs(read.tlen)
+		# 	tot_mean += tot_insert/len(container[bp].reads)
+
+		obs_mean = container[bp].calc_observed_insert()
+
+		if len(container[bp].reads) > 10:
+			nr_obs += 1
+			tot_mean += obs_mean
 
 
+		if p_val_upper_area < 0.001:
+			sv_container.add_bp_to_cluster(bp,1)
+			print 'Significant large position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred insertion in donor here'
+
+		if p_val_upper_area > 0.999:
+			sv_container.add_bp_to_cluster(bp,1)
+			print 'Significant small position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred deletion in donor here'
+
+		
+
+	print 'avg obs_mean:', tot_mean/nr_obs
+	print 'Sv clusters:'
+	for sv in sv_container.clusters:
+		print sv
 
 def main(args):
     container = ParseBAMfile(args.bampath,50)

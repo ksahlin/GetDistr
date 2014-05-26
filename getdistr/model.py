@@ -185,10 +185,10 @@ class NormalModel(object):
         E_x_given_z = 0
         norm_const = 0
         for t in range(z + 2 * (self.r - self.s_inner), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
-            norm_const += w(t - z , self.r, a, self.s_inner, self.s_outer, b=b) * normpdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
+            norm_const += w((t - z,0,0) , self.r, a, self.s_inner, self.s_outer, b=b) * normpdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
 
         for y in range(2 * (self.r - self.s_inner), self.mu + 6 * self.sigma - z): # iterate over possible observation span
-            weight = w(y , self.r, a, self.s_inner, self.s_outer, b=b)
+            weight = w((y,0,0) , self.r, a, self.s_inner, self.s_outer, b=b)
             w_times_f = weight * normpdf(z + y + 0.5, self.mu, self.sigma) # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
             E_x_given_z += (y + z) * w_times_f / norm_const
         return(E_x_given_z)
@@ -202,10 +202,10 @@ class NormalModel(object):
         E_x_square_given_z = 0
         norm_const = 0
         for t in range(z + 2 * (self.r - self.s_inner), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
-            norm_const += w(t - z , self.r, a, self.s_inner,self.s_outer,  b) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
+            norm_const += w((t - z,0,0) , self.r, a, self.s_inner,self.s_outer,  b) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
 
         for y in range(2 * (self.r - self.s_inner), self.mu + 6 * self.sigma - z): # iterate over possible observation span
-            weight = w(y , self.r, a,  self.s_inner, self.s_outer, b = b)
+            weight = w((y,0,0) , self.r, a,  self.s_inner, self.s_outer, b = b)
             w_times_f = weight * stats.norm.pdf(z + y + 0.5, self.mu, self.sigma) # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
             E_x_square_given_z += (y + z) ** 2 * w_times_f / norm_const
 
