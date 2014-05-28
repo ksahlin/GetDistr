@@ -168,12 +168,20 @@ class NormalModel(object):
 
     '''
 
-    def __init__(self, mu, sigma, r, s_inner=None,s_outer=None,breakdancer=False):
-        self.mu = mu
-        self.sigma = sigma
-        self.r = r
+    def __init__(self, mu, sigma, r, s_inner=None, s_outer=None, breakdancer=False):
+
         self.s_inner = s_inner if s_inner != None else r / 2
         self.s_outer = s_outer if s_outer != None else r / 2
+
+        # check that all given parameters are integers
+        if not all( map( lambda param: type(param) == int, [mu, sigma, r, self.s_inner, self.s_outer])):
+            warnings.warn("Warning: All parameters specified to NormalModel needs to be integers.\
+                you specified: mu:{0}, sigma:{1}, read length: {2} converting to closest integer value".format(mu,sigma,r))           
+        
+        self.mu = int(mu)
+        self.sigma = int(sigma)
+        self.r = int(r)
+
         self.breakdancer = breakdancer
 
 

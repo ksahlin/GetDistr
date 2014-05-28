@@ -33,6 +33,15 @@ import math
 
 from getdistr import model
 
+class Parameters(object):
+	"""docstring for Parameters"""
+	def __init__(self):
+		super(Parameters, self).__init__()
+		self.mean = None
+		self.stddev = None
+		self.d = None
+		self.pval = None
+		self.genome_length = None
 
 class ReadContainer(object):
 	"""docstring for ReadContainer"""
@@ -88,7 +97,60 @@ class ReadContainer(object):
 		return p_value_upper_area
 
 
-def ParseBAMfile(bamfile,read_length):
+
+class BreakPointContainer(object):
+	"""docstring for BreakPointContainer"""
+	def __init__(self):
+		super(BreakPointContainer, self).__init__()
+		self.clusters = {}
+		self.index = 1
+		self.clusterinfo = {}
+
+
+	def add_bp_to_cluster(self, pos, p_val, nr_obs, mean_obs, sv_type_observed, dist_thresh):
+		new_cluster = 1
+		for (sv_type,i), cluster in self.clusters.iteritems():
+			min_pos = min(cluster)
+			max_pos = max(cluster)
+
+			if sv_type_observed != sv_type:
+				continue
+
+			if pos <= max_pos + dist_thresh and pos >= min_pos - dist_thresh:
+				new_cluster = 0
+				cluster.append(pos)
+				self.clusterinfo[(sv_type,i)].append((p_val,nr_obs,mean_obs))
+				break
+
+		if new_cluster:
+			self.clusters[(sv_type_observed, self.index)] = [pos]
+			self.clusterinfo[(sv_type_observed, self.index)] = [(p_val,nr_obs,mean_obs)]
+			self.index += 1
+
+
+		if len(self.clusters) == 0:
+			self.clusters[(sv_type_observed, self.index)] = [pos]
+			self.clusterinfo[(sv_type_observed, self.index)] = [(p_val,nr_obs,mean_obs)]
+			self.index += 1
+
+	def get_final_bp_info(self):
+		self.final_bps = []
+		for region in self.clusters:
+			n = len(self.clusters[region])
+			median_basepair = self.clusters[region][n/2]
+			median_info =  self.clusterinfo[region][n/2]
+			cluster_length_span = max(self.clusters[region]) - min(self.clusters[region]) + 1
+			self.final_bps.append((region[0],median_basepair,median_info,cluster_length_span,n))
+
+	def __str__(self):
+		output_string= '#sv clusters:\n#<type>\t<pos>\t<cluster range>\t<nr sign. pvals in cluster>\t<info on called postion(pval,nr_obs,obs isize)>\n'
+		
+		for sv_type,median_basepair,median_info,cluster_length_span,n in self.final_bps:
+			output_string += '{0}\t{1}\t{2}\t{3}\t{4}\n'.format(sv_type,median_basepair,cluster_length_span,n,median_info) 
+		return output_string
+
+
+def ParseBAMfile(bamfile,param):
 	with pysam.Samfile(bamfile, 'rb') as bam:
 	# bam = pysam.Samfile(bamfile, 'rb')
 	#bam2 = pysam.Samfile(bamfile, 'rb')
@@ -106,7 +168,11 @@ def ParseBAMfile(bamfile,read_length):
 		container = {}
 		for i in range(ref_lengths[0]): # assumes only one chromosome, i.e. a single reference strand
 			container[i] = ReadContainer(i)
-		print ref_lengths[0]
+		param.genome_length = int(ref_lengths[0])
+
+		isize_sum = 0
+		isize_sum_sq = 0
+		isize_n = 0 
 	   	
 	   	for read1 in bam:
 	   		read2 = next(bam)
@@ -119,17 +185,21 @@ def ParseBAMfile(bamfile,read_length):
 		# Throw assertion error here otherwise.
 		# use for read1,read2 in zip(bam1,bam2,2) to iterate over the samfiles simultaneosly
 		# to use last aligned coordinate of mate instead of read_length (in case of softclipps)!
-
 	   		#print read.tlen,read.is_proper_pair,read.tlen, read.aend,read.pnext
 	   		counter += 1
-			if counter % 20000 == 0:
-				print 'Processed ', counter, 'reads.'
+			if counter % 10000 == 0:
+				print '#Processed ', counter, 'reads.'
 				#break
 
 	   		if not read1.is_proper_pair: # or len( read.cigar ) > 1:
 	   			counter2 +=1
 	   			continue
 
+
+	   		## add do insert size distribution calculation if proper pair
+	   		isize_sum +=  abs(read1.tlen)
+	   		isize_sum_sq += read1.tlen**2
+	   		isize_n += 1
 
 
 			#print inner_start_pos, inner_end_pos
@@ -148,51 +218,23 @@ def ParseBAMfile(bamfile,read_length):
 					container[pos].add_read(read2)
 
 
+	param.mean = isize_sum/float(isize_n)
+	param.stddev = (isize_sum_sq/isize_n - param.mean**2)**0.5 
 
-	print counter2, counter
+	# print counter2, counter,param.mean,param.stddev
 	return container
 
 
-class BreakPointContainer(object):
-	"""docstring for BreakPointContainer"""
-	def __init__(self):
-		super(BreakPointContainer, self).__init__()
-		self.clusters = []
 
 
-	def add_bp_to_cluster(self,pos,dist_thresh):
-		new_cluster = 1
-		for cluster in self.clusters:
-			min_pos = min(cluster)
-			max_pos = max(cluster)
-			print min_pos,max_pos
-			if pos <= max_pos + dist_thresh and pos >= min_pos - dist_thresh:
-				new_cluster = 0
-				cluster.append(pos)
-				break
-
-		if new_cluster:
-			self.clusters.append([pos])
-
-
-		if len(self.clusters) == 0:
-			self.clusters.append([pos])
-
-	# def __str__(self):
-	# 	for cluster in self.clusters:
-	# 		print cluster
-
-
-def GetBasePvalue(container,mu,sigma):
+def get_sv_clusters(container,param):
 	tot_mean = 0
 	nr_obs =0
-	est = model.NormalModel(mu,sigma,100,s_inner=0)
+	est = model.NormalModel(int(round(param.mean,0)),int(round(param.stddev,0)),100,s_inner=0)
 	# exp_stddev =  lagg till test av forvantad standard avvikelse
-	exp_insert = float(est.expected_mean(0,100000))
+	exp_insert = float(est.expected_mean(0,param.genome_length))
 	#exp_insert =  mu+ (sigma**2)/float(mu + 1)
-
-	print exp_insert, type(exp_insert)
-
+	print '#Average predicted mean over a base pair under p_0: {0}'.format(exp_insert)
 
 	##
 	# need to select a consensus loci for a breakpoint
@@ -200,10 +242,10 @@ def GetBasePvalue(container,mu,sigma):
 	sv_container = BreakPointContainer()
 
 
-	for bp in range(10000):
+	for bp in range(param.genome_length):
 		#print container[bp]
 		#print container[bp].calc_insert_pvalue
-		p_val_upper_area = container[bp].calc_pvalue(exp_insert,sigma)
+		p_val_upper_area = container[bp].calc_pvalue(exp_insert,param.stddev)
 		#print p_val
 		# tot_insert = 0
 		# if len(container[bp].reads) > 0:
@@ -212,134 +254,48 @@ def GetBasePvalue(container,mu,sigma):
 		# 	tot_mean += tot_insert/len(container[bp].reads)
 
 		obs_mean = container[bp].calc_observed_insert()
-
-		if len(container[bp].reads) > 10:
+		nr_reads_over_bp = len(container[bp].reads)
+		if  nr_reads_over_bp > 10:
 			nr_obs += 1
 			tot_mean += obs_mean
 
 
-		if p_val_upper_area < 0.001:
-			sv_container.add_bp_to_cluster(bp,1)
-			print 'Significant large position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred insertion in donor here'
+		if p_val_upper_area < param.pval:
+			sv_container.add_bp_to_cluster(bp,  p_val_upper_area, nr_reads_over_bp, obs_mean, 'insertion', param.d)
+			#print 'Significant large position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred insertion in donor here'
 
-		if p_val_upper_area > 0.999:
-			sv_container.add_bp_to_cluster(bp,1)
-			print 'Significant small position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred deletion in donor here'
+		if p_val_upper_area > 1 - param.pval:
+			sv_container.add_bp_to_cluster(bp, 1- p_val_upper_area, nr_reads_over_bp, obs_mean, 'deletion', param.d)
+			#print 'Significant small position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred deletion in donor here'
 
 		
 
-	print 'avg obs_mean:', tot_mean/nr_obs
-	print 'Sv clusters:'
-	for sv in sv_container.clusters:
-		print sv
+	print '#Average observed mean over a base pair:{0} (we expect this to be similar to the predicted one if not too many SVs)'.format(tot_mean/nr_obs)
+
+	return sv_container
+
+# def output_breaks(sv_container):
+# 	print '#sv clusters:'
+# 	for sv_type, cluster in sv_container.clusters.iteritems():
+# 		print sv_type, cluster
+# 		print sv_container.clusterinfo[sv_type]
+# 		# print 
+
+
 
 def main(args):
-    container = ParseBAMfile(args.bampath,50)
-    GetBasePvalue(container,args.mean,args.stddev)
+	param = Parameters()
+	param.d, param.pval = args.d, args.pval
+	container = ParseBAMfile(args.bampath,param)
+	sv_container = get_sv_clusters(container,param)
 
+	print '#Estimated library params: mean:{0} sigma:{1}'.format(param.mean,param.stddev)
+	print '#Genome length:{0}'.format(param.genome_length)
 
+	sv_container.get_final_bp_info()
+	print(sv_container)
+	# output_breaks(sv_container)
 
-
-# def SVdetector(bam1,bam2):
-#     def ParseBAMfile(bamfile):
-#         with pysam.Samfile(bamfile, 'rb') as bam_file:
-#             ref_length = bam_file.lengths[0]
-#             position_stats=[]
-#             for i in range(0,ref_length):
-#                 position_stats.append([0,0,0,0])  # inner list is [covarage , insert size , # insert size observations , nr of split reads]
-#             counter =0
-#             nr_paired_reads = 0
-#             insert_obs = 0
-#             insert_obs_sq = 0
-#             for alignedread in bam_file:
-#                 counter += 1
-#                 if not alignedread.is_unmapped and not alignedread.mate_is_unmapped:
-#                     #coverage and split reads
-#                     pos_mapped = alignedread.positions
-#                     prev_pos = pos_mapped[0]
-#                     for pos in pos_mapped:
-#                         position_stats[pos][0] += 1 #add to coverage
-#                         if pos - prev_pos > 1: #gap
-#                             position_stats[pos][3] += 1 #add to split reads                            
-#                         prev_pos = pos
-#                     position_stats[pos_mapped[-1]][3] += 1 #don't forget last position
-#                     #insert size
-#                     if alignedread.is_read1:                    
-#                         i_size = alignedread.tlen
-#                         nr_paired_reads += 1
-#                         insert_obs += alignedread.tlen
-#                         insert_obs_sq += alignedread.tlen**2
-#                         inner_start_pos = alignedread.aend
-#                         inner_end_pos = alignedread.pnext
-#                         for pos in range(inner_start_pos,inner_end_pos):
-#                             position_stats[pos][1] += i_size
-#                             position_stats[pos][2] += 1
-#                 if counter % 5000 == 0:
-#                     print 'Processed ', counter, 'positions on the genome'
-
-
-#         n=float(nr_paired_reads)
-#         mean_ins=insert_obs/n
-#         std_dev_ins = ((insert_obs_sq - n*mean_ins**2)/(n-1))**0.5
-#         tot_cov = 0
-#         for pos in range(0,len(position_stats)):
-#             tot_cov +=  position_stats[pos][0]
-#             #print position_stats[pos][0],tot_cov
-#             tot_i_size = position_stats[pos][1]
-#             try:
-#                 position_stats[pos][1] = tot_i_size/float(position_stats[pos][2])
-#             except ZeroDivisionError:
-#                 position_stats[pos][1] = 0                
-
-
-#         mean_cov = tot_cov/5000.0 #replace with float(len(position_stats))
-        
-#         print 'Nr paired reads total: ',n,'Estimated mean insert size: ', mean_ins,'Estimated std dev insert size: ', std_dev_ins,'Estimated mean coverage: ', mean_cov
-#         return(position_stats,mean_cov,std_dev_ins)
-
-
-#     def GetBasePvalue(stats1,stats2,mean_cov1,std_dev_ins1,mean_cov2,std_dev_ins2,bp):
-#         split_obs = stats1[3] - stats2[3]
-#         mean_split1 = stats1[0]/float(50) #hardcoded read length
-#         mean_split2 = stats2[0]/float(50) #hardcoded read length
-#         cov_obs = stats1[0] - stats2[0]
-#         try:
-#             std_dev_t_test = (std_dev_ins1**2/stats1[2] + std_dev_ins2**2/stats2[2] )**0.5
-#             degrees_of_frdm =   (std_dev_ins1**2/stats1[2] + std_dev_ins2**2/stats2[2] )**2 / ( (std_dev_ins1**2/stats1[2])**2 / float(stats1[2] -1 )  + (std_dev_ins2**2/stats2[2])**2  / float(stats2[2] -1 ) )
-#             #print 'Std dev: ', std_dev_t_test, 'dgrs of frdm: ', degrees_of_frdm, stats1[2], stats2[2]
-#         except ZeroDivisionError:
-#             #just put some values not giving  a significant t-statistic
-#             std_dev_t_test = 1000
-#             degrees_of_frdm = 2
-#         ins_obs = (stats1[1] - stats2[1]) / std_dev_t_test   #assuming equal standard deviation here, therefore I only use one!
-#         #print mean_split1,mean_split2,cov_obs, ins_obs
-#         pval1 = skellam.cdf(split_obs,mean_split1 ,mean_split2, loc=0)
-#         pval2 = skellam.cdf(cov_obs, mean_cov1 ,mean_cov2, loc=0)
-#         pval3 = (1- t.cdf(ins_obs, degrees_of_frdm, loc=0, scale = 1) ) #this only does one sided testing
-#         #print pval3
-#         if pval1 < 0.01:
-#             print 'Significant position split reads: Pos: ',bp, ' p-value = ', pval1
-#         if pval2 < 0.01:
-#             print 'Significant position covarage diff: Pos: ',bp, ' p-value = ', pval2
-#         if pval3 < 0.01:
-#             print 'Significant position ins size diff: Pos: ',bp, ' p-value = ', pval3                        
-        
-#         return(pval1,pval2,pval3)
-    
-#     #Read in libraries from the two donor genomes
-#     list1, mean_cov1,std_dev_ins1 = ParseBAMfile(bam1)
-#     list2, mean_cov2,std_dev_ins2 = ParseBAMfile(bam2)
-#     #do statistical testing for each bp in the reference genome
-#     vector_of_pvals1=[]
-#     vector_of_pvals2=[]
-#     vector_of_pvals3=[]
-#     for bp in range(len(list1)):
-#         pval1,pval2,pval3 = GetBasePvalue(list1[bp],list2[bp],mean_cov1,std_dev_ins1,mean_cov2,std_dev_ins2,bp)
-#         vector_of_pvals1.append( pval1)
-#         vector_of_pvals2.append( pval2)
-#         vector_of_pvals3.append( pval3)
-
-#     return()
 
 
 if __name__ == '__main__':
@@ -347,8 +303,12 @@ if __name__ == '__main__':
     # Take care of input
 	parser = argparse.ArgumentParser(description="Infer variants with simple p-value test using theory of GetDistr - proof of concept.")
 	parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
-	parser.add_argument('mean', type=int, help='mean insert size. ')
-	parser.add_argument('stddev', type=int, help='Standard deviation of insert size ')
+	parser.add_argument('pval', type=float, help='p-value threshold for calling a variant. ')
+	parser.add_argument('d', type=int, help='distance threshold for clustering close p-values. All significant p-values\
+	cloder than d will be clustered ')
+
+	# parser.add_argument('mean', type=int, help='mean insert size. ')
+	# parser.add_argument('stddev', type=int, help='Standard deviation of insert size ')
 
 
 	args = parser.parse_args()
