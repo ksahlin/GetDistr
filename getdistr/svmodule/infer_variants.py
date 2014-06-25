@@ -100,12 +100,12 @@ class ReadContainer(object):
 
 class BreakPointContainer(object):
 	"""docstring for BreakPointContainer"""
-	def __init__(self):
+	def __init__(self,param):
 		super(BreakPointContainer, self).__init__()
 		self.clusters = {}
 		self.index = 1
 		self.clusterinfo = {}
-
+		self.param = param
 
 	def add_bp_to_cluster(self, pos, p_val, nr_obs, mean_obs, sv_type_observed, dist_thresh):
 		new_cluster = 1
@@ -146,7 +146,8 @@ class BreakPointContainer(object):
 		output_string= '#sv clusters:\n#<type>\t<pos>\t<cluster range>\t<nr sign. pvals in cluster>\t<info on called postion(pval,nr_obs,obs isize)>\n'
 		
 		for sv_type,median_basepair,median_info,cluster_length_span,n in self.final_bps:
-			output_string += '{0}\t{1}\t{2}\t{3}\t{4}\n'.format(sv_type,median_basepair,cluster_length_span,n,median_info) 
+			if median_basepair > self.param.mean and median_basepair < self.param.genome_length - self.param.mean:
+				output_string += '{0}\t{1}\t{2}\t{3}\t{4}\n'.format(sv_type,median_basepair,cluster_length_span,n,median_info) 
 		return output_string
 
 
@@ -263,7 +264,7 @@ def get_sv_clusters(container,param):
 	##
 	# need to select a consensus loci for a breakpoint
 	# using only insert size 
-	sv_container = BreakPointContainer()
+	sv_container = BreakPointContainer(param)
 
 
 	for bp in range(param.genome_length):
