@@ -5,7 +5,7 @@ Created on Sep 18, 2013
 '''
 
 import argparse
-
+from mathstats.normaldist.normal import MaxObsDistr
 # class PositionStats:
 # 	def get_spanning_reads(self, position, read_length, read_path):
 # 	   	observations = [ ]
@@ -150,6 +150,15 @@ class BreakPointContainer(object):
 		return output_string
 
 
+def AdjustInsertsizeDist(mean_insert, std_dev_insert, insert_list):
+    k = MaxObsDistr(len(insert_list), 0.95)
+    filtered_list = list(filter((lambda x : (x < mean_insert + k * std_dev_insert and x > mean_insert - k * std_dev_insert)), insert_list))
+    if len(insert_list) > len(filtered_list):
+        return(True, filtered_list)
+    else:
+        return(False, filtered_list)
+
+
 def ParseBAMfile(bamfile,param):
 	with pysam.Samfile(bamfile, 'rb') as bam:
 	# bam = pysam.Samfile(bamfile, 'rb')
@@ -170,9 +179,9 @@ def ParseBAMfile(bamfile,param):
 			container[i] = ReadContainer(i)
 		param.genome_length = int(ref_lengths[0])
 
-		isize_sum = 0
-		isize_sum_sq = 0
-		isize_n = 0 
+		isize_list = []
+		#isize_sum_sq = 0
+		#isize_n = 0 
 	   	
 	   	for read1 in bam:
 	   		read2 = next(bam)
@@ -197,9 +206,9 @@ def ParseBAMfile(bamfile,param):
 
 
 	   		## add do insert size distribution calculation if proper pair
-	   		isize_sum +=  abs(read1.tlen)
-	   		isize_sum_sq += read1.tlen**2
-	   		isize_n += 1
+	   		isize_list.append(abs(read1.tlen))
+	   		#isize_sum_sq += read1.tlen**2
+	   		#isize_n += 1
 
 
 			#print inner_start_pos, inner_end_pos
@@ -217,9 +226,24 @@ def ParseBAMfile(bamfile,param):
 					container[pos].add_read(read1)
 					container[pos].add_read(read2)
 
+		n_isize = float(len(isize_list))
+		mean_isize = sum(isize_list)/n_isize
+		std_dev_isize =  (sum(list(map((lambda x: x ** 2 - 2 * x * mean_isize + mean_isize ** 2), isize_list))) / (n_isize - 1)) ** 0.5
+		print '#Mean before filtering :', mean_isize
+		print '#Stddev before filtering: ', std_dev_isize
+		extreme_obs_occur = True
+		while extreme_obs_occur:
+			extreme_obs_occur, filtered_list = AdjustInsertsizeDist(mean_isize, std_dev_isize, isize_list)
+			n_isize = float(len(filtered_list))
+			mean_isize = sum(filtered_list) / n_isize
+			std_dev_isize = (sum(list(map((lambda x: x ** 2 - 2 * x * mean_isize + mean_isize ** 2), filtered_list))) / (n_isize - 1)) ** 0.5
+			isize_list = filtered_list
 
-	param.mean = isize_sum/float(isize_n)
-	param.stddev = (isize_sum_sq/isize_n - param.mean**2)**0.5 
+		print '#Mean converged:', mean_isize
+		print '#Std_est converged: ', std_dev_isize
+
+	param.mean = mean_isize
+	param.stddev = std_dev_isize 
 
 	# print counter2, counter,param.mean,param.stddev
 	return container
@@ -261,11 +285,11 @@ def get_sv_clusters(container,param):
 
 
 		if p_val_upper_area < param.pval:
-			sv_container.add_bp_to_cluster(bp,  p_val_upper_area, nr_reads_over_bp, obs_mean, 'insertion', param.d)
+			sv_container.add_bp_to_cluster(bp,  p_val_upper_area, nr_reads_over_bp, obs_mean, 'deletion', param.d)
 			#print 'Significant large position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred insertion in donor here'
 
 		if p_val_upper_area > 1 - param.pval:
-			sv_container.add_bp_to_cluster(bp, 1- p_val_upper_area, nr_reads_over_bp, obs_mean, 'deletion', param.d)
+			sv_container.add_bp_to_cluster(bp, 1- p_val_upper_area, nr_reads_over_bp, obs_mean, 'insertion', param.d)
 			#print 'Significant small position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred deletion in donor here'
 
 		
@@ -280,6 +304,7 @@ def get_sv_clusters(container,param):
 # 		print sv_type, cluster
 # 		print sv_container.clusterinfo[sv_type]
 # 		# print 
+
 
 
 
@@ -305,7 +330,7 @@ if __name__ == '__main__':
 	parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
 	parser.add_argument('pval', type=float, help='p-value threshold for calling a variant. ')
 	parser.add_argument('d', type=int, help='distance threshold for clustering close p-values. All significant p-values\
-	cloder than d will be clustered ')
+	closer than d will be clustered ')
 
 	# parser.add_argument('mean', type=int, help='mean insert size. ')
 	# parser.add_argument('stddev', type=int, help='Standard deviation of insert size ')
