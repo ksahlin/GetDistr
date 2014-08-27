@@ -28,8 +28,9 @@ from mathstats.normaldist.normal import MaxObsDistr
 
 import sys
 import pysam
-from scipy.stats import norm
+from scipy.stats import norm, t, chi2
 import math
+from itertools import ifilter
 
 from getdistr import model
 
@@ -42,6 +43,17 @@ class Parameters(object):
 		self.d = None
 		self.pval = None
 		self.genome_length = None
+		self.nobs = None
+
+	def get_pval_threshold(self):
+		mean_sd = t.ppf( 0.975, self.nobs - 1 ) * self.stddev / math.sqrt( self.nobs )
+		sd_sd = math.sqrt( (self.nobs - 1) * self.stddev**2 / chi2.ppf( 0.025, self.nobs - 1 ) )
+
+		mean_conservative = self.mean + mean_sd
+		sd_conservative = sd_sd
+
+		z = norm.ppf( self.pval / 2.0, mean_conservative, sd_conservative )
+		return norm.cdf( z, self.mean, self.stddev )
 
 class ReadContainer(object):
 	"""docstring for ReadContainer"""
@@ -57,7 +69,6 @@ class ReadContainer(object):
 
 	def print_bam(self):
 		"Print reads on bam format "
-		pass
 
 	def calc_observed_insert(self):
 		n = len(self.reads)
@@ -182,15 +193,18 @@ def ParseBAMfile(bamfile,param):
 
 		isize_list = []
 		#isize_sum_sq = 0
-		#isize_n = 0 
+		#isize_n = 0
+
+		bam_filtered = ifilter(lambda r: r.flag <= 200, bam)
 	   	
-	   	for read1 in bam:
-	   		read2 = next(bam)
+		for read1 in bam_filtered:
+			read2 = next(bam_filtered)
 			#print read1
 			#print read2
 			#print read1.tlen,read2.tlen
 	   		assert read1.tlen == - read2.tlen
 	   		assert read1.is_proper_pair == read2.is_proper_pair
+
 		# Make sure that bamfile is sorted so that mates come after eachotern
 		# Throw assertion error here otherwise.
 		# use for read1,read2 in zip(bam1,bam2,2) to iterate over the samfiles simultaneosly
@@ -201,13 +215,20 @@ def ParseBAMfile(bamfile,param):
 				print '#Processed ', counter, 'reads.'
 				#break
 
-	   		if not read1.is_proper_pair: # or len( read.cigar ) > 1:
-	   			counter2 +=1
-	   			continue
+	   		#if not read1.is_proper_pair: # or len( read.cigar ) > 1:
+	   		#	counter2 +=1
+	   		#	continue
+
+			if read1.is_unmapped or read2.is_unmapped:
+				continue
+
+			if any(x[ 0 ] in ( 1, 2 ) for x in read1.cigar + read2.cigar):
+				continue
 
 
 	   		## add do insert size distribution calculation if proper pair
-	   		isize_list.append(abs(read1.tlen))
+			if len( read1.cigar ) == 1 and len( read2.cigar ) == 1:
+				isize_list.append(abs(read1.tlen))
 	   		#isize_sum_sq += read1.tlen**2
 	   		#isize_n += 1
 
@@ -243,6 +264,7 @@ def ParseBAMfile(bamfile,param):
 		print '#Mean converged:', mean_isize
 		print '#Std_est converged: ', std_dev_isize
 
+	param.nobs = n_isize
 	param.mean = mean_isize
 	param.stddev = std_dev_isize 
 
@@ -257,7 +279,7 @@ def get_sv_clusters(container,param):
 	nr_obs =0
 	est = model.NormalModel(int(round(param.mean,0)),int(round(param.stddev,0)),100,s_inner=0)
 	# exp_stddev =  lagg till test av forvantad standard avvikelse
-	exp_insert = float(est.expected_mean(0,param.genome_length))
+	exp_insert = float(est.expected_mean(1,param.genome_length))
 	#exp_insert =  mu+ (sigma**2)/float(mu + 1)
 	print '#Average predicted mean over a base pair under p_0: {0}'.format(exp_insert)
 
@@ -266,7 +288,8 @@ def get_sv_clusters(container,param):
 	# using only insert size 
 	sv_container = BreakPointContainer(param)
 
-
+	pval_threshold = param.get_pval_threshold()
+	print "#Adjusted threshold: {0}".format(pval_threshold)
 	for bp in range(param.genome_length):
 		#print container[bp]
 		#print container[bp].calc_insert_pvalue
@@ -278,6 +301,7 @@ def get_sv_clusters(container,param):
 		# 		tot_insert += abs(read.tlen)
 		# 	tot_mean += tot_insert/len(container[bp].reads)
 
+		#print bp, p_val_upper_area
 		obs_mean = container[bp].calc_observed_insert()
 		nr_reads_over_bp = len(container[bp].reads)
 		if  nr_reads_over_bp > 10:
@@ -285,11 +309,11 @@ def get_sv_clusters(container,param):
 			tot_mean += obs_mean
 
 
-		if p_val_upper_area < param.pval:
+		if p_val_upper_area < pval_threshold:
 			sv_container.add_bp_to_cluster(bp,  p_val_upper_area, nr_reads_over_bp, obs_mean, 'deletion', param.d)
 			#print 'Significant large position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred insertion in donor here'
 
-		if p_val_upper_area > 1 - param.pval:
+		if p_val_upper_area > 1 - pval_threshold:
 			sv_container.add_bp_to_cluster(bp, 1- p_val_upper_area, nr_reads_over_bp, obs_mean, 'insertion', param.d)
 			#print 'Significant small position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred deletion in donor here'
 
