@@ -277,7 +277,7 @@ def ParseBAMfile(bamfile,param):
 def get_sv_clusters(container,param):
 	tot_mean = 0
 	nr_obs =0
-	est = model.NormalModel(int(round(param.mean,0)),int(round(param.stddev,0)),100,s_inner=0)
+	est = model.NormalModel(param.mean,param.stddev,100,s_inner=0)
 	# exp_stddev =  lagg till test av forvantad standard avvikelse
 	exp_insert = float(est.expected_mean(1,param.genome_length))
 	#exp_insert =  mu+ (sigma**2)/float(mu + 1)
