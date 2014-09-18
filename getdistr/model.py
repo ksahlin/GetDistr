@@ -174,12 +174,12 @@ class NormalModel(object):
         self.s_outer = s_outer if s_outer != None else r / 2
 
         # check that all given parameters are integers
-        if not all( map( lambda param: type(param) == int, [mu, sigma, r, self.s_inner, self.s_outer])):
+        if not all( map( lambda param: type(param) == int, [r, self.s_inner, self.s_outer])):
             warnings.warn("Warning: All parameters specified to NormalModel needs to be integers.\
-                you specified: mu:{0}, sigma:{1}, read length: {2} converting to closest integer value".format(mu,sigma,r))           
+                you specified: read length: {0}, s_inner = {1}, s_outer = {2} converting to closest integer value".format(r, s_inner,s_outer))           
         
-        self.mu = int(mu)
-        self.sigma = int(sigma)
+        self.mu = mu
+        self.sigma = sigma
         self.r = int(r)
 
         self.breakdancer = breakdancer
@@ -192,10 +192,10 @@ class NormalModel(object):
         '''
         E_x_given_z = 0
         norm_const = 0
-        for t in range(z + 2 * (self.r - self.s_inner), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
+        for t in range(z + 2 * (self.r - self.s_inner), int(self.mu) + 6 * int(self.sigma)): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
             norm_const += w((t - z,0,0) , self.r, a, self.s_inner, self.s_outer, b=b) * normpdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
 
-        for y in range(2 * (self.r - self.s_inner), self.mu + 6 * self.sigma - z): # iterate over possible observation span
+        for y in range(2 * (self.r - self.s_inner), int(self.mu) + 6 * int(self.sigma) - z): # iterate over possible observation span
             weight = w((y,0,0) , self.r, a, self.s_inner, self.s_outer, b=b)
             w_times_f = weight * normpdf(z + y + 0.5, self.mu, self.sigma) # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
             E_x_given_z += (y + z) * w_times_f / norm_const
@@ -209,10 +209,10 @@ class NormalModel(object):
         E_x_given_z = self.expected_mean(z, a, b)
         E_x_square_given_z = 0
         norm_const = 0
-        for t in range(z + 2 * (self.r - self.s_inner), self.mu + 6 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
+        for t in range(z + 2 * (self.r - self.s_inner), int(self.mu) + 6 * int(self.sigma)): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
             norm_const += w((t - z,0,0) , self.r, a, self.s_inner,self.s_outer,  b) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
 
-        for y in range(2 * (self.r - self.s_inner), self.mu + 6 * self.sigma - z): # iterate over possible observation span
+        for y in range(2 * (self.r - self.s_inner), int(self.mu) + 6 * int(self.sigma) - z): # iterate over possible observation span
             weight = w((y,0,0) , self.r, a,  self.s_inner, self.s_outer, b = b)
             w_times_f = weight * stats.norm.pdf(z + y + 0.5, self.mu, self.sigma) # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
             E_x_square_given_z += (y + z) ** 2 * w_times_f / norm_const
@@ -265,8 +265,8 @@ class NormalModel(object):
 
         #do binary search among limited range of values
         
-        z_upper= self.mu + 3 * self.sigma - (2 * (self.r - self.s_inner))
-        z_lower=-3 * self.sigma
+        z_upper= int(self.mu) + 3 * int(self.sigma) - (2 * (self.r - self.s_inner))
+        z_lower=-3 * int(self.sigma)
         z_u = int((z_upper+z_lower)/2.0 + precision)
         z_l = int((z_upper+z_lower)/2.0)
         while z_upper-z_lower>precision:
@@ -335,13 +335,13 @@ class NormalModel(object):
         ##
         # calculate the normalization constant for a given gap length z
         norm_const = 0
-        for t in range(z + 2 * (self.r - self.s_inner), self.mu + 7 * self.sigma): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
+        for t in range(z + 2 * (self.r - self.s_inner), int(self.mu) + 7 * int(self.sigma)): #iterate over possible fragment sizes   ##range((self.mu - 5 * self.sigma) - y, self.mu + 6 * self.sigma - y): #
             #norm_const += w(t - z , self.r, a, self.s_inner, self.s_outer, b=b) * stats.norm.pdf(t + 0.5, self.mu, self.sigma)  # +0.5 because we approximate a continuous distribution (avg function value of pdf given points i and i+1, just like integration)
             norm_const += w((t - z, 0, 0) , self.r, a, self.s_inner, self.s_outer, b=b, breakdancer=self.breakdancer) * normpdf(t + 0.5, self.mu, self.sigma)
         # eventual softclipped outer reads, they will have the same observation "a" but be of different
         #lengths due to outer softclipped bases
         if a < self.mu + 7 * self.sigma:
-            for i in range(1, min(2*self.s_outer, (self.mu + 7 * self.sigma - a ) )):
+            for i in range(1, min(2*self.s_outer, (int(self.mu) + 7 * int(self.sigma) - a ) )):
                 norm_const += w((a, 0, i) , self.r, a, self.s_inner,self.s_outer, b=b) * normpdf(z+a+i + 0.5, self.mu, self.sigma)
 
 
@@ -400,7 +400,7 @@ class NormalModel(object):
         # This loop iterates over all possible gaps z, we want to see the ML estimation of
         # The interesting range is in general not above  mean + 3*stddev
 
-        for z in range(-3 * self.sigma, self.mu + 3 * self.sigma - (2 * (self.r - self.s_inner)), precision): 
+        for z in range(-3 * int(self.sigma), int(self.mu) + 3 * int(self.sigma) - (2 * (self.r - self.s_inner)), precision): 
             likelihood_curve.append((z,self.get_likelihood_value(z, list_of_obs, a, b, coverage,n , coverage_model)))
 
         return(likelihood_curve)
@@ -440,8 +440,6 @@ class NormalModel(object):
             # This is equivalent to uniform coverage
             return 1 #uniform.pdf(nr_obs, loc=lambda_- 0.3*lambda_, scale=lambda_ + 0.3*lambda_ )
 
-
-         
 
 
 

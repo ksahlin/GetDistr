@@ -4,8 +4,10 @@ Created on Sep 18, 2013
 @author: ksahlin
 '''
 
+import pickle
 import argparse
 from mathstats.normaldist.normal import MaxObsDistr
+
 # class PositionStats:
 # 	def get_spanning_reads(self, position, read_length, read_path):
 # 	   	observations = [ ]
@@ -40,8 +42,7 @@ class Parameters(object):
 		super(Parameters, self).__init__()
 		self.mean = None
 		self.stddev = None
-		self.d = None
-		self.pval = None
+		self.m = None
 		self.genome_length = None
 		self.nobs = None
 
@@ -89,23 +90,31 @@ class ReadContainer(object):
 
 		return isize_obs / float(len(self.reads)/2)
 
-	
-	def calc_pvalue(self,expected_insert,sigma):
+	def get_observations_for_GapEst(self):
 		n = len(self.reads)
 		if n == 0:
-			return 0.5 # return a non significant p-value
-	    #insert size
-		mean_insert_obs = self.calc_observed_insert()
-		# tot_insert = 0
-		# for read in self.reads:
-		# 	tot_insert += abs(read.tlen)
-		# mean_insert_obs = tot_insert/float(n)  
-		#print mean_insert_obs
+			return []
 
-		z = (mean_insert_obs - expected_insert)/(float(sigma)/math.sqrt(n)) # z-statistic
-		p_value_upper_area = norm.sf(z) 
-		#print z, p_value
-		return p_value_upper_area
+		observations = []
+		modulo = 0
+		for read1,read2 in zip(self.reads[:-1],self.reads[1:]):
+			if modulo == 1:
+				modulo = 0
+				continue
+			else: 
+		   		assert read1.tlen == - read2.tlen
+		   		assert read1.is_proper_pair == read2.is_proper_pair
+		   		observations.append(abs(read1.tlen)) 
+				modulo = 1
+		return observations 
+
+	def calc_expected_gap(self,model_object,genome_length):
+		#mean_insert_obs = self.calc_observed_insert()
+		list_of_obs = self.get_observations_for_GapEst()
+		if not list_of_obs:
+			return 0,0 
+		gap = model_object.run_GapEst(list_of_obs, genome_length)
+		return gap, len(list_of_obs)
 
 
 
@@ -213,7 +222,6 @@ def ParseBAMfile(bamfile,param):
 	   		counter += 1
 			if counter % 10000 == 0:
 				print '#Processed ', counter, 'reads.'
-				#break
 
 	   		#if not read1.is_proper_pair: # or len( read.cigar ) > 1:
 	   		#	counter2 +=1
@@ -226,8 +234,10 @@ def ParseBAMfile(bamfile,param):
 				continue
 
 
-	   		## add do insert size distribution calculation if proper pair
-			if len( read1.cigar ) == 1 and len( read2.cigar ) == 1:
+	   		## add do insert size distribution calculation if proper pair and is not to close to "borders"
+			if len( read1.cigar ) == 1 and len( read2.cigar ) == 1 \
+				and read1.pos > 500 and read1.pos < param.genome_length - 500 \
+				and read2.pos > 500 and read2.pos < param.genome_length - 500:
 				isize_list.append(abs(read1.tlen))
 	   		#isize_sum_sq += read1.tlen**2
 	   		#isize_n += 1
@@ -272,14 +282,56 @@ def ParseBAMfile(bamfile,param):
 	return container
 
 
+def calc_pos_h_index(gaps,p_start):
+	upper_h = int(gaps[p_start][1])
+	if upper_h + p_start > len(gaps):
+		upper_h = len(gaps) - (p_start + 1)
+	if upper_h == 0:
+		return 0
+	current_h = 0
+	for h in range(1,upper_h+1):
+		i = 0
+		while i <= h:
+			i+=1
+			if gaps[p_start+i][1] >= h:
+				continue
+			else:
+				break
+		if i-1 > current_h:
+			current_h = i - 1
+		else:
+			break
+	return current_h
+
+
+def calc_neg_h_index(gaps,p_start):
+	upper_h = -int(gaps[p_start][1])
+	if upper_h + p_start > len(gaps):
+		upper_h = len(gaps) - (p_start + 1)
+	if upper_h == 0:
+		return 0
+	current_h = 0
+	for h in range(1,upper_h+1):
+		i = 0
+		while i <= h:
+			i+=1
+			if -gaps[p_start+i][1] >= h:
+				continue
+			else:
+				break
+		if i-1 > current_h:
+			current_h = i - 1
+		else:
+			break
+	return current_h			
 
 
 def get_sv_clusters(container,param):
 	tot_mean = 0
 	nr_obs =0
-	est = model.NormalModel(param.mean,param.stddev,100,s_inner=0)
+	est = model.NormalModel(param.mean, param.stddev,100,s_inner=0)
 	# exp_stddev =  lagg till test av forvantad standard avvikelse
-	exp_insert = float(est.expected_mean(1,param.genome_length))
+	exp_insert = float(est.expected_mean(0,param.genome_length))
 	#exp_insert =  mu+ (sigma**2)/float(mu + 1)
 	print '#Average predicted mean over a base pair under p_0: {0}'.format(exp_insert)
 
@@ -291,17 +343,10 @@ def get_sv_clusters(container,param):
 	pval_threshold = param.get_pval_threshold()
 	print "#Adjusted threshold: {0}".format(pval_threshold)
 	for bp in range(param.genome_length):
-		#print container[bp]
-		#print container[bp].calc_insert_pvalue
-		p_val_upper_area = container[bp].calc_pvalue(exp_insert,param.stddev)
-		#print p_val
-		# tot_insert = 0
-		# if len(container[bp].reads) > 0:
-		# 	for read in container[bp].reads:
-		# 		tot_insert += abs(read.tlen)
-		# 	tot_mean += tot_insert/len(container[bp].reads)
-
-		#print bp, p_val_upper_area
+		gap = container[bp].calc_expected_gap(est,param.genome_length)
+		print gap
+		if bp > 1000:
+			break
 		obs_mean = container[bp].calc_observed_insert()
 		nr_reads_over_bp = len(container[bp].reads)
 		if  nr_reads_over_bp > 10:
@@ -309,13 +354,13 @@ def get_sv_clusters(container,param):
 			tot_mean += obs_mean
 
 
-		if p_val_upper_area < pval_threshold:
-			sv_container.add_bp_to_cluster(bp,  p_val_upper_area, nr_reads_over_bp, obs_mean, 'deletion', param.d)
-			#print 'Significant large position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred insertion in donor here'
+		# if p_val_upper_area < pval_threshold:
+		# 	sv_container.add_bp_to_cluster(bp,  p_val_upper_area, nr_reads_over_bp, obs_mean, 'deletion', param.d)
+		# 	#print 'Significant large position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred insertion in donor here'
 
-		if p_val_upper_area > 1 - pval_threshold:
-			sv_container.add_bp_to_cluster(bp, 1- p_val_upper_area, nr_reads_over_bp, obs_mean, 'insertion', param.d)
-			#print 'Significant small position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred deletion in donor here'
+		# if p_val_upper_area > 1 - pval_threshold:
+		# 	sv_container.add_bp_to_cluster(bp, 1- p_val_upper_area, nr_reads_over_bp, obs_mean, 'insertion', param.d)
+		# 	#print 'Significant small position insert size reads: Pos: ',bp, ' p-value = ', p_val_upper_area, 'nr of reads:', len(container[bp].reads), 'obs insert: ', obs_mean,'inferred deletion in donor here'
 
 		
 
@@ -335,8 +380,31 @@ def get_sv_clusters(container,param):
 
 def main(args):
 	param = Parameters()
-	param.d, param.pval = args.d, args.pval
-	container = ParseBAMfile(args.bampath,param)
+	param.m = args.m
+	if args.pickle:
+		gaps = pickle.load( open( "/tmp/getdistr_bp_objects_new.p", "rb" ) )
+		gap_file = open("/tmp/getdistr_gaps_new.txt",'w')
+		h_file = open("/tmp/getdistr_h_new.txt",'w') 
+		for gap in gaps:
+			p_start = gap[0]
+			print >> gap_file, gap
+			if gaps[p_start][1] >= 0:
+				h = calc_pos_h_index(gaps,p_start)
+				print >> h_file, str(p_start)+', '+str(h)+str(', ins')
+			else:
+				h = calc_neg_h_index(gaps,p_start)
+				print >> h_file, str(p_start)+', '+str(-h)+str(', del')
+
+	else:
+		container = ParseBAMfile(args.bampath,param)
+		est = model.NormalModel(param.mean,param.stddev,100,s_inner=0)
+		gaps=[]
+		for bp in range(param.genome_length):
+			gap,nr_obs = container[bp].calc_expected_gap(est,param.genome_length)
+			gaps.append((bp,gap,nr_obs))
+			
+		pickle.dump(gaps,open( "/tmp/getdistr_bp_objects_new.p", "wb" ))
+
 	sv_container = get_sv_clusters(container,param)
 
 	print '#Estimated library params: mean:{0} sigma:{1}'.format(param.mean,param.stddev)
@@ -353,9 +421,8 @@ if __name__ == '__main__':
     # Take care of input
 	parser = argparse.ArgumentParser(description="Infer variants with simple p-value test using theory of GetDistr - proof of concept.")
 	parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
-	parser.add_argument('pval', type=float, help='p-value threshold for calling a variant. ')
-	parser.add_argument('d', type=int, help='distance threshold for clustering close p-values. All significant p-values\
-	closer than d will be clustered ')
+	parser.add_argument('--pickle', action="store_true" , help='Read in pickled container datastructure ')
+	parser.add_argument('m', type=int, help='Threshold for min h-index. ')
 
 	# parser.add_argument('mean', type=int, help='mean insert size. ')
 	# parser.add_argument('stddev', type=int, help='Standard deviation of insert size ')

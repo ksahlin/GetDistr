@@ -164,8 +164,8 @@ def plot_stddev_frag(args):
     for label in legend.get_lines():
         label.set_linewidth(1.5)  # the legend line width
 
-    ax.set_xlabel('$z$', fontsize=24)
-    ax.set_ylabel('$\sigma_{x|z}$', fontsize=24)
+    ax.set_xlabel('$\delta$', fontsize=24)
+    ax.set_ylabel('$\sigma_{x|\delta}$', fontsize=24)
 
     plt.savefig(args.outfile, format='eps')
 
@@ -186,7 +186,7 @@ def plot3d_mean_frag(args):
         fragm_dist_object = model.NormalModel(args.mean, sigma, args.readlen, args.softclipped)
         given_sigma = []
         for gap in args.gaps:
-            given_sigma.append(fragm_dist_object.expected_mean(gap, args.reflen, args.reflen))
+            given_sigma.append(float(fragm_dist_object.expected_mean(gap, args.reflen, args.reflen)))
         std_dev.append(given_sigma)
     Z = np.array(std_dev)
 
@@ -212,7 +212,7 @@ def plot3d_mean_frag(args):
     #fig.colorbar(surf, shrink=0.5, aspect=5)
 
 
-    ax.set_xlabel('$z$', fontsize=24)
+    ax.set_xlabel('$\delta$', fontsize=24)
     ax.set_ylabel('$\sigma$', fontsize=24)
     ax.set_zlabel('$E[X]$', fontsize=24)
 
