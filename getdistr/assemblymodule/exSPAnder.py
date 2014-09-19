@@ -1,3 +1,78 @@
+from genomics_tools.file_format import bam
+
+class Point(object):
+    """docstring for Point"""
+    def __init__(self, x, y):
+        super(Point, self).__init__()
+        self.x = x
+        self.y = y
+
+class Link(object):
+    """docstring for Link"""
+    def __init__(self, e,e_prime):
+        super(Link, self).__init__()
+        self.e = e
+        self.e_prime = e_prime
+        self.points = []
+
+    def add_point(self):
+        pass
+
+    def density(self):
+        #e, e_prime
+        pass
+    def expected(self):
+        #e, e_prime
+        pass
+
+class Linkings(object):
+    """docstring for Linkings"""
+    def __init__(self):
+        super(Linkings, self).__init__()
+        self.linkings = {} # dict (e,e'):  
+    def add_linking(self):
+        pass
+
+class Path(object):
+    """docstring for Path"""
+    def __init__(self,extension):
+        super(Path, self).__init__()
+        self.path = []
+        self.linkings = []
+        self.e = extension
+
+    def add_linking(self):
+        pass
+
+
+    def score(self, e):
+        for linking in self.paths:
+            pass
+
+    def support(self, e):
+
+        pass
+    def expected(self,path, e):
+        pass
+
+class ExSPAnder(object):
+    """docstring for ExSPAnder"""
+    def __init__(self, paths):
+        super(ExSPAnder, self).__init__()
+        self.paths = []
+
+    def score_paths(self,e):
+        for path in self.paths:
+            path.score(e)
+
+
+
+
+def main(args):
+
+    for unique_link in bam.unique_links(args.bam_file):
+        pass
+
 if __name__ == '__main__':
     ##
     # Take care of input
