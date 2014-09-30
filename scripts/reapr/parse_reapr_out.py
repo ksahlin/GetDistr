@@ -5,7 +5,7 @@ import argparse
 def main(args):
 	outfile = open(args.outfile,'a')
 	print >> outfile, 'type\t#errors'
-	for line in open(args.infile,'r'):
+	for line in open(args.infile.strip(),'r'):
 		if line[0] == '#':
 			continue
 		else:
