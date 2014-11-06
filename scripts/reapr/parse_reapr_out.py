@@ -10,9 +10,9 @@ def main(args):
 			continue
 		else:
 			scf_name = line.split()[0]
-			nr_errors = line.split()[14]
-
-		print >> outfile, scf_name+'\t'+nr_errors
+			nr_errors = line.split()[12]
+			errors_length = line.split()[13]
+		print >> outfile, scf_name+'\t'+nr_errors + '\t'+errors_length
 if __name__ == '__main__':
     ##
     # Take care of input
