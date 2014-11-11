@@ -14,6 +14,7 @@
 import argparse
 import math
 from decimal import Decimal, getcontext
+from mathstats.normaldist.normal import normpdf 
 
 
 def normcdf(x, mu, sigma):
@@ -23,12 +24,12 @@ def normcdf(x, mu, sigma):
         y = 1.0;
     return y
 
-def normpdf(x, mu, sigma):
-    #Get much better approximations with Decimal (simply more decimals)
-    getcontext().prec = 100
-    u = Decimal(str(x - mu)) / Decimal(str(abs(sigma)))
-    y = float(str((1 / Decimal(str((math.sqrt(2 * math.pi) * abs(sigma))))) * Decimal(str(-u * u / 2)).exp()))
-    return y
+# def normpdf(x, mu, sigma):
+#     #Get much better approximations with Decimal (simply more decimals)
+#     getcontext().prec = 100
+#     u = Decimal(str(x - mu)) / Decimal(str(abs(sigma)))
+#     y = float(str((1 / Decimal(str((math.sqrt(2 * math.pi) * abs(sigma))))) * Decimal(str(-u * u / 2)).exp()))
+#     return y
 
 
 
@@ -64,7 +65,7 @@ class Param(object):
         self.cov = cov
         self.s_inner = s_inner
         self.s_outer = s_outer
-        self.readfrequency = 2 * self.read_len / self.cov
+        self.readfrequency = 2 * self.read_len / float(self.cov)
 
 
 def mean_span_coverage(len1, len2, d, param):
@@ -100,7 +101,7 @@ if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser(description="calculates the expected number of links spanning two contigs. ")
     arg_parser.add_argument("mean", type=int, help="Mean insert size.")
     arg_parser.add_argument("stddev", type=int, help="Standard deviation of insert size.")
-    arg_parser.add_argument("cov", type=int, help="Mean coverage.")
+    arg_parser.add_argument("cov", type=float, help="Mean coverage.")
     arg_parser.add_argument("readlen", type=int, help="Read length.")
     arg_parser.add_argument("soft", type=int, help="Number of softclipped bases allowed.")
     arg_parser.add_argument("len1", type=int, help="Contig1 length.")
