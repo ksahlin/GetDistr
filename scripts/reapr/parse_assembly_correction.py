@@ -43,8 +43,9 @@ def get_true_breakpoints(infile):
 def main(args):
 	outfile = open(args.outfile,'a')
 	true_breakpoints = get_true_breakpoints(open(args.true_gff, 'r'))
+
 	if args.tools_gff[-3:] == '.gz':
-		tool_results = open(args.tools_gff, 'rb')
+		tool_results = gzip.open(args.tools_gff, 'rb')
 	else:
 		tool_results = open(args.tools_gff, 'r')
 	scaffold_tp_fp = compare_misassemblies( tool_results, true_breakpoints)
