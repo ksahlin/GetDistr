@@ -20,7 +20,8 @@ echo "Simulating"
 
 for gap in 0 250 500 750 1000 1250 1500
 do
-        python /home/kris/git_repos/genomics_tools/scripts/main_simulate.py 10000 $gap 2000 500 100 100 "$reapr_in"'gap_'"$gap" -sort -scafs -errors -1500 -1250 -1000 -750 -500 -250 0 250 500 750 1000 1250 1500 -burnin 4000000 -nrgaps 100
+        python /home/kris/git_repos/genomics_tools/scripts/main_simulate_reapr.py 5000 0 300 30 10 50 "$reapr_in"'gap_'"$gap" -sort -scafs -errors -1500 -1250 -1000 -750 -500 -250 0 250 500 750 1000 1250 1500 -burnin 4000 -nrgaps 10
+        #python /home/kris/git_repos/genomics_tools/scripts/main_simulate.py 10000 $gap 2000 500 100 100 "$reapr_in"'gap_'"$gap" -sort -scafs -errors -1500 -1250 -1000 -750 -500 -250 0 250 500 750 1000 1250 1500 -burnin 4000000 -nrgaps 100
 done
 
 for gap in 0 250 500 750 1000 1250 1500
@@ -38,6 +39,6 @@ touch reapr_results.txt
 
 for gap in 0 250  500 750 1000 1250 1500
 do
-        python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in"'gap_'"$gap/true_error_pos.gff" "$reapr_out"'gap_'"$gap/03.score.errors.gff.gz" >> "reapr_results.txt"
+        python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in"'gap_'"$gap/true_error_pos.gff" "$reapr_out"'gap_'"$gap/03.score.errors.gff.gz" "/tmp/reaper_out" >> "reapr_results.txt"
         #python /home/kris/git_repos/GetDistr/scripts/reapr/parse_reapr_out.py  "$reapr_out"'gap_'"$gap/05.summary.stats.tsv" "reapr_results.txt"
 done

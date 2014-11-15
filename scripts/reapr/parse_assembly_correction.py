@@ -1,4 +1,5 @@
 
+import gzip
 import argparse
 
 def is_true_positive(pred_start, pred_stop, true_breakpoints ):
@@ -42,7 +43,11 @@ def get_true_breakpoints(infile):
 def main(args):
 	outfile = open(args.outfile,'a')
 	true_breakpoints = get_true_breakpoints(open(args.true_gff, 'r'))
-	scaffold_tp_fp = compare_misassemblies( open(args.tools_gff, 'r'), true_breakpoints)
+	if args.tools_gff[-3:] == '.gz':
+		tool_results = open(args.tools_gff, 'rb')
+	else:
+		tool_results = open(args.tools_gff, 'r')
+	scaffold_tp_fp = compare_misassemblies( tool_results, true_breakpoints)
 
 	for scaf_name, (TP,FP) in scaffold_tp_fp.iteritems():
 		print '{0}\t{1}\t{2}'.format(scaf_name, TP,FP)
