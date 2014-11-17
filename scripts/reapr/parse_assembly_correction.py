@@ -1,6 +1,7 @@
 
 import gzip
 import argparse
+from genomics_tools.file_formats.fasta import fasta_iter
 
 def is_true_positive(pred_start, pred_stop, true_breakpoints ):
 	for start,stop in true_breakpoints:
@@ -13,19 +14,21 @@ def is_true_positive(pred_start, pred_stop, true_breakpoints ):
 
 	return False
 
-def compare_misassemblies(infile, true_breakpoints):
+def compare_misassemblies(scafs, infile, true_breakpoints):
 	scaffold_tp_fp = {}
+	for acc, scf in fasta_iter(open(scafs, 'r')):
+		scaffold_tp_fp[acc] = [0,0]
+	
 	for line in infile:
-		print line
 		values = line.strip().split()
-		scaf_name = values[0]
+		scaf_name = values[0][1:]
 
-		if scaf_name not in scaffold_tp_fp:
-			scaffold_tp_fp[scaf_name] = [0,0] # TP, FP
+		#if scaf_name not in scaffold_tp_fp:
+		#	scaffold_tp_fp[scaf_name] = [0,0] # TP, FP
 		
 		if values[2] == 'FCD':
 			start,stop = int(line.strip().split()[3]), int(line.strip().split()[4])
-			if is_true_positive:
+			if is_true_positive(start, stop,true_breakpoints):
 				scaffold_tp_fp[scaf_name][0] += 1
 			else:
 				scaffold_tp_fp[scaf_name][1] += 1
@@ -48,7 +51,7 @@ def main(args):
 		tool_results = gzip.open(args.tools_gff, 'rb')
 	else:
 		tool_results = open(args.tools_gff, 'r')
-	scaffold_tp_fp = compare_misassemblies( tool_results, true_breakpoints)
+	scaffold_tp_fp = compare_misassemblies( args.scafs, tool_results, true_breakpoints)
 
 	for scaf_name, (TP,FP) in scaffold_tp_fp.iteritems():
 		print '{0}\t{1}\t{2}'.format(scaf_name, TP,FP)
@@ -68,7 +71,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Parse reapr's results.")
     parser.add_argument('true_gff', type=str, help="True misassemblies. ")    
     parser.add_argument('tools_gff', type=str, help="Tool's predicted misassemblies. ")
-    #parser.add_argument('reapr_outfile', type=str, help=" Reapr's utfile." )
+    parser.add_argument('scafs', type=str, help=" scaffold fasta file." )
     parser.add_argument('outfile', type=str, help="Tools results. ")
 
     args = parser.parse_args()
