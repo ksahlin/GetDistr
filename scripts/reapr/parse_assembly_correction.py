@@ -3,8 +3,8 @@ import gzip
 import argparse
 from genomics_tools.file_formats.fasta import fasta_iter
 
-def is_true_positive(pred_start, pred_stop, true_breakpoints ):
-	for start,stop in true_breakpoints:
+def is_true_positive(pred_scaf,pred_start, pred_stop, true_breakpoints ):
+	for start, stop in true_breakpoints[pred_scaf]:
 		## in true expansion interval or contraction interval of a gap
 		if start <= pred_start <= stop or start <= pred_stop <= stop:
 			return True
@@ -28,7 +28,7 @@ def compare_misassemblies(scafs, infile, true_breakpoints):
 		
 		if values[2] == 'FCD':
 			start,stop = int(line.strip().split()[3]), int(line.strip().split()[4])
-			if is_true_positive(start, stop,true_breakpoints):
+			if is_true_positive(scaf_name, start, stop,true_breakpoints):
 				scaffold_tp_fp[scaf_name][0] += 1
 			else:
 				scaffold_tp_fp[scaf_name][1] += 1
@@ -37,10 +37,15 @@ def compare_misassemblies(scafs, infile, true_breakpoints):
 
 
 def get_true_breakpoints(infile):
-	true_breakpoints = set()
+	true_breakpoints = {}
 	for line in infile:
+		scaf_name = line.strip().split()[0]
 		start,stop = int(line.strip().split()[3]), int(line.strip().split()[4])
-		true_breakpoints.add((start,stop))
+		if scaf_name not in true_breakpoints:
+			true_breakpoints[scaf_name] = set()
+			true_breakpoints[scaf_name].add((start,stop))
+		else:
+			true_breakpoints[scaf_name].add((start,stop))
 	return true_breakpoints
 
 def main(args):
