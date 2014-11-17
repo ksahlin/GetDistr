@@ -21,7 +21,7 @@ def compare_misassemblies(scafs, infile, true_breakpoints):
 	
 	for line in infile:
 		values = line.strip().split()
-		scaf_name = values[0][1:]
+		scaf_name = values[0]
 
 		#if scaf_name not in scaffold_tp_fp:
 		#	scaffold_tp_fp[scaf_name] = [0,0] # TP, FP

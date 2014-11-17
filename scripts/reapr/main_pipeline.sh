@@ -39,6 +39,6 @@ touch reapr_results.txt
 
 for gap in 0 250  500 750 1000 1250 1500
 do
-        python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in"'gap_'"$gap/true_error_pos.gff" "$reapr_out"'gap_'"$gap/03.score.errors.gff.gz" "/tmp/reaper_out" >> "reapr_results.txt"
+        python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in"'gap_'"$gap/true_error_pos.gff" "$reapr_out"'gap_'"$gap/03.score.errors.gff.gz" "$reapr_in"'gap_'"$gap/ctgs.fa" "/tmp/reaper_out" >> "reapr_results.txt"
         #python /home/kris/git_repos/GetDistr/scripts/reapr/parse_reapr_out.py  "$reapr_out"'gap_'"$gap/05.summary.stats.tsv" "reapr_results.txt"
 done
