@@ -19,7 +19,7 @@ def compare_misassemblies(scafs, infile, true_breakpoints, scaffold_tp_fp):
 		values = line.strip().split()
 		scaf_name = values[0]
 		
-		if values[2] == 'FCD':
+		if values[2] == 'FCD' or values[2] == 'FCD_gap':
 			start,stop = int(line.strip().split()[3]), int(line.strip().split()[4])
 			if is_true_positive(scaf_name, start, stop,true_breakpoints):
 				scaffold_tp_fp[scaf_name][0] += 1
