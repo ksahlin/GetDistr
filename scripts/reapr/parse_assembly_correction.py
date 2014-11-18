@@ -14,17 +14,10 @@ def is_true_positive(pred_scaf,pred_start, pred_stop, true_breakpoints ):
 
 	return False
 
-def compare_misassemblies(scafs, infile, true_breakpoints):
-	scaffold_tp_fp = {}
-	for acc, scf in fasta_iter(open(scafs, 'r')):
-		scaffold_tp_fp[acc] = [0,0]
-	
+def compare_misassemblies(scafs, infile, true_breakpoints, scaffold_tp_fp):
 	for line in infile:
 		values = line.strip().split()
 		scaf_name = values[0]
-
-		#if scaf_name not in scaffold_tp_fp:
-		#	scaffold_tp_fp[scaf_name] = [0,0] # TP, FP
 		
 		if values[2] == 'FCD':
 			start,stop = int(line.strip().split()[3]), int(line.strip().split()[4])
@@ -36,27 +29,31 @@ def compare_misassemblies(scafs, infile, true_breakpoints):
 	return scaffold_tp_fp	
 
 
-def get_true_breakpoints(infile):
-	true_breakpoints = {}
+def get_true_breakpoints(infile,true_breakpoints):
 	for line in infile:
 		scaf_name = line.strip().split()[0]
 		start,stop = int(line.strip().split()[3]), int(line.strip().split()[4])
-		if scaf_name not in true_breakpoints:
-			true_breakpoints[scaf_name] = set()
-			true_breakpoints[scaf_name].add((start,stop))
-		else:
-			true_breakpoints[scaf_name].add((start,stop))
+		true_breakpoints[scaf_name].add((start,stop))
 	return true_breakpoints
+
+def initialize_containers(args):
+	scaffold_tp_fp = {}
+	true_breakpoints = {}
+	for acc, scf in fasta_iter(open(args.scafs, 'r')):
+		scaffold_tp_fp[acc] = [0,0]
+		true_breakpoints[acc] = set()
+	return true_breakpoints, scaffold_tp_fp
 
 def main(args):
 	outfile = open(args.outfile,'a')
-	true_breakpoints = get_true_breakpoints(open(args.true_gff, 'r'))
+	true_breakpoints, scaffold_tp_fp =  initialize_containers(args)
+	true_breakpoints = get_true_breakpoints(open(args.true_gff, 'r'), true_breakpoints)
 
 	if args.tools_gff[-3:] == '.gz':
 		tool_results = gzip.open(args.tools_gff, 'rb')
 	else:
 		tool_results = open(args.tools_gff, 'r')
-	scaffold_tp_fp = compare_misassemblies( args.scafs, tool_results, true_breakpoints)
+	scaffold_tp_fp = compare_misassemblies( args.scafs, tool_results, true_breakpoints, scaffold_tp_fp)
 
 	for scaf_name, (TP,FP) in scaffold_tp_fp.iteritems():
 		print '{0}\t{1}\t{2}'.format(scaf_name, TP,FP)
