@@ -6,13 +6,14 @@ Created on Sep 18, 2013
 
 import argparse
 from mathstats.normaldist.normal import MaxObsDistr
-from scipy.stats import ks_2samp
+from scipy.stats import ks_2samp,norm
 import random
 
 import pysam
 #import math
 from itertools import ifilter
 import model
+import bisect
 
 class Parameters(object):
 	"""docstring for Parameters"""
@@ -25,7 +26,42 @@ class Parameters(object):
 		self.genome_length = None
 		self.nobs = None
 		self.true_distr = None
+	def get_true_normal_distribution(self,sample):
+		read_len = 100
+		softclipps = 0
+		#self.temp_cdf = {}
+		#self.temp_cdf[norm.cdf(2*(read_len-softclipps), self.mean, self.stddev) * 1] = 2*(read_len-softclipps)  # weight one for one placement
+		cdf_list =[norm.cdf(2*(read_len-softclipps), self.mean, self.stddev) * 1]
+		for x in range(2*(read_len-softclipps) +1,int(self.mean + 6*self.stddev)):
+			increment_area = norm.pdf(x, self.mean, self.stddev) * (x-(2*(read_len-softclipps)-1))
+			#self.temp_cdf[sum(cdf_list) + increment_area] = x
+			cdf_list.append( cdf_list[-1] + increment_area)
+		tot_cdf = cdf_list[-1]
+		cdf_list_normalized = map(lambda x: x /float(tot_cdf),cdf_list)
 
+		# Now create a weighted sample
+		self.true_distr = []
+		for i in range(1000):
+			obs = random.uniform(0, 1)
+			pos = bisect.bisect(cdf_list_normalized, obs) - 1
+			#print obs, pos
+			self.true_distr.append(pos + 2*(read_len-softclipps))
+
+
+		n = len(self.true_distr)
+		self.adjusted_mean = sum(self.true_distr)/float(len(self.true_distr))
+		self.adjusted_stddev = (sum(list(map((lambda x: x ** 2 - 2 * x * self.adjusted_mean + self.adjusted_mean ** 2), self.true_distr))) / (n - 1)) ** 0.5
+
+		print 'Corrected mean:{0}, corrected stddev:{1}'.format(self.adjusted_mean, self.adjusted_stddev)
+		# for x in range(2*(read_len-softclipps) +1,self.mean + 6*self.stddev):
+
+		# norm.pdf()
+		# min_weight, max_weight = observations[0], observations[-1]
+		
+		# total_weight = 
+
+	#def cdf(x):
+	#	return self.cdf
 
 class ReadContainer(object):
 	"""docstring for ReadContainer"""
@@ -83,7 +119,7 @@ class ReadContainer(object):
 	# 	return p_value_upper_area
 
 	def calc_ks_test(self,true_distribution):
-		return ks_2samp(true_distribution,self.isize_list)
+		return ks_2samp(self.isize_list, true_distribution)
 
 
 
@@ -242,11 +278,10 @@ def ParseBAMfile(bamfile,param):
 		print '#Mean converged:', mean_isize
 		print '#Std_est converged: ', std_dev_isize
 
-	param.true_distr = random.sample(isize_list, 1000)
 	param.nobs = n_isize
 	param.mean = mean_isize
 	param.stddev = std_dev_isize 
-
+	param.get_true_normal_distribution(random.sample(isize_list, 2000))
 	# print counter2, counter,param.mean,param.stddev
 	return container
 
@@ -287,7 +322,7 @@ def get_misassembly_clusters(container,param):
 
 
 		if two_side_p_val < param.pval:
-			if avg_isize > param.mean:
+			if avg_isize > param.adjusted_mean:
 				sv_container.add_bp_to_cluster(bp,  two_side_p_val, len(container[bp].isize_list), container[bp].mean_isize, 'expansion', param.d)
 			else:
 				sv_container.add_bp_to_cluster(bp,  two_side_p_val, len(container[bp].isize_list), container[bp].mean_isize, 'contraction', param.d)
