@@ -15,6 +15,8 @@ from itertools import ifilter
 import model
 import bisect
 
+import matplotlib.pyplot as plt
+
 class Parameters(object):
 	"""docstring for Parameters"""
 	def __init__(self):
@@ -119,8 +121,10 @@ class ReadContainer(object):
 	# 	return p_value_upper_area
 
 	def calc_ks_test(self,true_distribution):
-		return ks_2samp(self.isize_list, true_distribution)
-
+		if self.isize_list:
+			return ks_2samp(self.isize_list, true_distribution)
+		else:
+			return -1, -1
 
 
 class BreakPointContainer(object):
@@ -186,6 +190,7 @@ def AdjustInsertsizeDist(mean_insert, std_dev_insert, insert_list):
 
 
 def ParseBAMfile(bamfile,param):
+	
 	with pysam.Samfile(bamfile, 'rb') as bam:
 	# bam = pysam.Samfile(bamfile, 'rb')
 	#bam2 = pysam.Samfile(bamfile, 'rb')
@@ -300,7 +305,7 @@ def get_misassembly_clusters(container,param):
 	# need to select a consensus loci for a breakpoint
 	# using only insert size 
 	sv_container = BreakPointContainer(param)
-
+	p_values = []
 	#pval_threshold = param.get_pval_threshold()
 	#print "#Adjusted threshold: {0}".format(pval_threshold)
 	for bp in range(param.genome_length):
@@ -311,7 +316,11 @@ def get_misassembly_clusters(container,param):
 		# do KS-2sample test
 		avg_isize = container[bp].calc_observed_insert()
 		KS_statistic, two_side_p_val = container[bp].calc_ks_test(param.true_distr) 
-		
+		if two_side_p_val >=0:
+			p_values.append(two_side_p_val)
+		else: 
+			continue
+
 		if bp% 1000==0:
 			print bp, two_side_p_val
 		# obs_mean = container[bp].calc_observed_insert()
@@ -327,6 +336,9 @@ def get_misassembly_clusters(container,param):
 			else:
 				sv_container.add_bp_to_cluster(bp,  two_side_p_val, len(container[bp].isize_list), container[bp].mean_isize, 'contraction', param.d)
 
+	#print p_values
+	plt.hist(p_values,bins=50)
+	plt.show()
 		
 	return sv_container
 

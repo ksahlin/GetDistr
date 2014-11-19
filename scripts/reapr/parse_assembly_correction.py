@@ -74,7 +74,7 @@ if __name__ == '__main__':
     parser.add_argument('true_gff', type=str, help="True misassemblies. ")    
     parser.add_argument('tools_gff', type=str, help="Tool's predicted misassemblies. ")
     parser.add_argument('scafs', type=str, help=" scaffold fasta file." )
-    parser.add_argument('outfile', type=str, help="Tools results. ")
+    #parser.add_argument('outfile', type=str, help="Tools results. ")
 
     args = parser.parse_args()
 
