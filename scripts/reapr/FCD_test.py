@@ -9,13 +9,21 @@ from mathstats.normaldist.normal import MaxObsDistr
 from scipy.stats import ks_2samp,norm
 import random
 
+
 import pysam
 #import math
 from itertools import ifilter
 import model
 import bisect
 
+from Queue import Queue
+
 import matplotlib.pyplot as plt
+
+def is_proper_aligned_unique_innie(read):
+    return (read.is_reverse and not read.mate_is_reverse and read.is_read1 and read.tlen < 0 and read.rname == read.mrnm) or \
+                (not read.is_reverse and read.mate_is_reverse and read.is_read1 and read.tlen > 0 and read.rname == read.mrnm ) \
+                and not read.mate_is_unmapped and read.mapq > 10 and not read.is_secondary
 
 class Parameters(object):
 	"""docstring for Parameters"""
@@ -28,6 +36,40 @@ class Parameters(object):
 		self.genome_length = None
 		self.nobs = None
 		self.true_distr = None
+
+	def sample_distribution(self,bamfile):
+		isize_list = []
+		sample_size = 5000000
+		for i,read in enumerate(bamfile):
+	   		## add do insert size distribution calculation if proper pair
+			if is_proper_aligned_unique_innie(read):
+				isize_list.append(abs(read.tlen))
+			if i > sample_size:
+				break
+		bamfile.reset()
+
+		n_isize = float(len(isize_list))
+		mean_isize = sum(isize_list)/n_isize
+		std_dev_isize =  (sum(list(map((lambda x: x ** 2 - 2 * x * mean_isize + mean_isize ** 2), isize_list))) / (n_isize - 1)) ** 0.5
+		print '#Mean before filtering :', mean_isize
+		print '#Stddev before filtering: ', std_dev_isize
+		extreme_obs_occur = True
+		while extreme_obs_occur:
+			extreme_obs_occur, filtered_list = AdjustInsertsizeDist(mean_isize, std_dev_isize, isize_list)
+			n_isize = float(len(filtered_list))
+			mean_isize = sum(filtered_list) / n_isize
+			std_dev_isize = (sum(list(map((lambda x: x ** 2 - 2 * x * mean_isize + mean_isize ** 2), filtered_list))) / (n_isize - 1)) ** 0.5
+			isize_list = filtered_list
+
+		print '#Mean converged:', mean_isize
+		print '#Std_est converged: ', std_dev_isize
+
+		self.nobs = n_isize
+		self.mean = mean_isize
+		self.stddev = std_dev_isize 
+		self.get_true_normal_distribution(random.sample(isize_list, 4000))
+
+
 	def get_true_normal_distribution(self,sample):
 		read_len = 100
 		softclipps = 0
@@ -80,27 +122,25 @@ class ReadContainer(object):
 	def print_bam(self):
 		"Print reads on bam format "
 
+
+	def write_pval_to_file(self,outfile,ref_name):
+		print >> outfile, '{0}\t{1}\t{2}\t{3}\t{4}\t{5}'.format(ref_name, self.position, self.pval,len(self.isize_list), self.mean_isize, self.std_dev_isize)
+
 	def calc_observed_insert(self):
-		self.isize_list = []
-		n = len(self.reads)
-		if n == 0:
-			return 0
+		#print self.reads
+		#print 'list:',map(lambda x: x.tlen, self.reads )
+		self.mean_isize = 0
+		self.std_dev_isize = 0
+		self.isize_list = map(lambda x: x.tlen, self.reads )
+		#print len( self.isize_list)
+		if len( self.isize_list) <= 5:
+			self.mean_isize = -1
+			return
 
-		isize_obs = 0
-		modulo = 0
-		for read1,read2 in zip(self.reads[:-1],self.reads[1:]):
-			if modulo == 1:
-				modulo = 0
-				continue
-			else: 
-		   		assert read1.tlen == - read2.tlen
-		   		assert read1.is_proper_pair == read2.is_proper_pair
-		   		isize_obs += abs(read1.tlen)
-		   		self.isize_list.append(abs(read1.tlen))
-				modulo = 1
+		n_isize = float(len(self.isize_list))
+		self.mean_isize = sum(self.isize_list)/n_isize
+		self.std_dev_isize =  (sum(list(map((lambda x: x ** 2 - 2 * x * self.mean_isize + self.mean_isize ** 2), self.isize_list))) / (n_isize - 1)) ** 0.5
 
-		self.mean_isize = isize_obs / float(len(self.reads)/2)
-		return isize_obs / float(len(self.reads)/2)
 
 	
 	# def calc_pvalue(self,expected_insert,sigma):
@@ -121,9 +161,11 @@ class ReadContainer(object):
 	# 	return p_value_upper_area
 
 	def calc_ks_test(self,true_distribution):
-		if self.isize_list:
-			return ks_2samp(self.isize_list, true_distribution)
+		if len(self.isize_list) >= 5:
+			KS_statistic, self.pval = ks_2samp(self.isize_list, true_distribution)
+			return KS_statistic, self.pval 
 		else:
+			self.pval = -1
 			return -1, -1
 
 
@@ -189,174 +231,170 @@ def AdjustInsertsizeDist(mean_insert, std_dev_insert, insert_list):
         return(False, filtered_list)
 
 
-def ParseBAMfile(bamfile,param):
-	
-	with pysam.Samfile(bamfile, 'rb') as bam:
-	# bam = pysam.Samfile(bamfile, 'rb')
-	#bam2 = pysam.Samfile(bamfile, 'rb')
+def calc_p_values(bamfile,outfile,param):
 
-
-		ref_lengths = bam.lengths
-
-		##
-		# create a container holding all interesting reads 
-		# for a given position in the reference sequence
-		counter =0
-
-	   	counter2= 0 
-
-		container = {}
-		for i in range(ref_lengths[0]): # assumes only one chromosome, i.e. a single reference strand
-			container[i] = ReadContainer(i)
-		param.genome_length = int(ref_lengths[0])
-
-		isize_list = []
-		#isize_sum_sq = 0
-		#isize_n = 0
-
-		bam_filtered = ifilter(lambda r: r.flag <= 200, bam)
-	   	
-		for read1 in bam_filtered:
-			read2 = next(bam_filtered)
-			#print read1
-			#print read2
-			#print read1.tlen,read2.tlen
-	   		assert read1.tlen == - read2.tlen
-	   		assert read1.is_proper_pair == read2.is_proper_pair
-
-		# Make sure that bamfile is sorted so that mates come after eachotern
-		# Throw assertion error here otherwise.
-		# use for read1,read2 in zip(bam1,bam2,2) to iterate over the samfiles simultaneosly
-		# to use last aligned coordinate of mate instead of read_length (in case of softclipps)!
-	   		#print read.tlen,read.is_proper_pair,read.tlen, read.aend,read.pnext
-	   		counter += 1
-			if counter % 10000 == 0:
-				print '#Processed ', counter, 'reads.'
-				#break
-
-	   		#if not read1.is_proper_pair: # or len( read.cigar ) > 1:
-	   		#	counter2 +=1
-	   		#	continue
-
-			if read1.is_unmapped or read2.is_unmapped:
-				continue
-
-			if any(x[ 0 ] in ( 1, 2 ) for x in read1.cigar + read2.cigar):
-				continue
-
-
-	   		## add do insert size distribution calculation if proper pair
-			if len( read1.cigar ) == 1 and len( read2.cigar ) == 1:
-				isize_list.append(abs(read1.tlen))
-	   		#isize_sum_sq += read1.tlen**2
-	   		#isize_n += 1
-
-
-			#print inner_start_pos, inner_end_pos
-			if read1.tlen > 0:
-				inner_start_pos = read1.aend
-				inner_end_pos = read2.pos
-				for pos in range(inner_start_pos,inner_end_pos):
-					container[pos].add_read(read1)
-					container[pos].add_read(read2)
-			else:
-				inner_start_pos = read2.aend
-				inner_end_pos = read1.pos
-
-				for pos in range(inner_start_pos,inner_end_pos):
-					container[pos].add_read(read1)
-					container[pos].add_read(read2)
-
-		n_isize = float(len(isize_list))
-		mean_isize = sum(isize_list)/n_isize
-		std_dev_isize =  (sum(list(map((lambda x: x ** 2 - 2 * x * mean_isize + mean_isize ** 2), isize_list))) / (n_isize - 1)) ** 0.5
-		print '#Mean before filtering :', mean_isize
-		print '#Stddev before filtering: ', std_dev_isize
-		extreme_obs_occur = True
-		while extreme_obs_occur:
-			extreme_obs_occur, filtered_list = AdjustInsertsizeDist(mean_isize, std_dev_isize, isize_list)
-			n_isize = float(len(filtered_list))
-			mean_isize = sum(filtered_list) / n_isize
-			std_dev_isize = (sum(list(map((lambda x: x ** 2 - 2 * x * mean_isize + mean_isize ** 2), filtered_list))) / (n_isize - 1)) ** 0.5
-			isize_list = filtered_list
-
-		print '#Mean converged:', mean_isize
-		print '#Std_est converged: ', std_dev_isize
-
-	param.nobs = n_isize
-	param.mean = mean_isize
-	param.stddev = std_dev_isize 
-	param.get_true_normal_distribution(random.sample(isize_list, 2000))
-	# print counter2, counter,param.mean,param.stddev
-	return container
-
-
-
-
-def get_misassembly_clusters(container,param):
-	# tot_mean = 0
-	# nr_obs =0
-	# est = model.NormalModel(param.mean,param.stddev,100,s_inner=0)
-	# # exp_stddev =  lagg till test av forvantad standard avvikelse
-	# exp_insert = float(est.expected_mean(1,param.genome_length))
-	# #exp_insert =  mu+ (sigma**2)/float(mu + 1)
-	# print '#Average predicted mean over a base pair under p_0: {0}'.format(exp_insert)
-	##
-	# need to select a consensus loci for a breakpoint
-	# using only insert size 
-	sv_container = BreakPointContainer(param)
 	p_values = []
-	#pval_threshold = param.get_pval_threshold()
-	#print "#Adjusted threshold: {0}".format(pval_threshold)
-	for bp in range(param.genome_length):
+	with pysam.Samfile(bamfile, 'rb') as bam:
+
+		#sample true distribution
+		param.sample_distribution(bam)
+
+		# start scoring
+		#reference_tids = map(lambda x: bam.gettid(x),bam.references )
+		reference_lengths = map(lambda x: int(x), bam.lengths)
+		scaf_dict = dict(zip(bam.references, reference_lengths))
+		bam_filtered = ifilter(lambda r: r.flag <= 200, bam)
+		current_scaf = -1
+		print scaf_dict
+		for i,read in enumerate(bam_filtered):
+			current_coord = read.pos
+			current_ref = bam.getrname(read.tid)
+			if (i + 1) %1000 == 0:
+				# print i
+				print 'Processing coord:{0}'.format(current_coord)
+				# if (i+1) % 15000 == 0:
+				# # 	print 'extra!'
+				#   	break
+
+			if read.is_unmapped:
+				continue
+			# initialize read container for new scaffold
+			if current_ref != current_scaf:
+				container = []
+				scaf_length = scaf_dict[current_ref]
+
+				# store positions in reverse to reduce complexity when removing items from lits in
+				# python. We remove the last item and so on
+				for i in range(scaf_length,0,-1):
+					container.append(ReadContainer(i))
+				current_scaf = current_ref 
+			# the read pairs we want to use for calculating FCD
+			if is_proper_aligned_unique_innie(read):
+				#print 'here'
+				if read.tlen > 0:
+					inner_start_pos = read.aend
+					inner_end_pos = read.mpos
+					#print inner_start_pos, inner_end_pos
+					for pos in range(inner_start_pos,inner_end_pos):
+						container[scaf_length - pos].add_read(read)
+						#container[pos].add_read(read2)
+				else:
+					inner_start_pos = read.mpos +read.rlen
+					inner_end_pos = read.pos
+					#print inner_start_pos, inner_end_pos
+					for pos in range(inner_start_pos,inner_end_pos):
+						container[scaf_length - pos].add_read(read)
+						#container[pos].add_read(read2)
+
+			# write positions out to file
+			if  current_coord > scaf_length - len(container):
+
+				while scaf_length - len(container) < current_coord:
+					#print 'lloollzz',current_coord, scaf_length - len(container)
+					# do ks_2_sample
+					container[-1].calc_observed_insert()
+					KS_statistic, two_side_p_val = container[-1].calc_ks_test(param.true_distr) 
+					if two_side_p_val > 0:
+						p_values.append(two_side_p_val)
+					# write chromosome, coord, p_val to file
+					container[-1].write_pval_to_file(outfile,current_ref)
+					del container[-1]
 
 
-		#p_val_upper_area = container[bp].calc_pvalue(exp_insert,param.stddev)
-
-		# do KS-2sample test
-		avg_isize = container[bp].calc_observed_insert()
-		KS_statistic, two_side_p_val = container[bp].calc_ks_test(param.true_distr) 
-		if two_side_p_val >=0:
-			p_values.append(two_side_p_val)
-		else: 
-			continue
-
-		if bp% 1000==0:
-			print bp, two_side_p_val
-		# obs_mean = container[bp].calc_observed_insert()
-		# nr_reads_over_bp = len(container[bp].reads)
-		# if  nr_reads_over_bp > 10:
-		# 	nr_obs += 1
-		# 	tot_mean += obs_mean
+	#plt.hist(p_values,bins=50)
+	#plt.show()
 
 
-		if two_side_p_val < param.pval:
-			if avg_isize > param.adjusted_mean:
-				sv_container.add_bp_to_cluster(bp,  two_side_p_val, len(container[bp].isize_list), container[bp].mean_isize, 'expansion', param.d)
-			else:
-				sv_container.add_bp_to_cluster(bp,  two_side_p_val, len(container[bp].isize_list), container[bp].mean_isize, 'contraction', param.d)
+# def get_misassembly_clusters(container,param):
+# 	# tot_mean = 0
+# 	# nr_obs =0
+# 	# est = model.NormalModel(param.mean,param.stddev,100,s_inner=0)
+# 	# # exp_stddev =  lagg till test av forvantad standard avvikelse
+# 	# exp_insert = float(est.expected_mean(1,param.genome_length))
+# 	# #exp_insert =  mu+ (sigma**2)/float(mu + 1)
+# 	# print '#Average predicted mean over a base pair under p_0: {0}'.format(exp_insert)
+# 	##
+# 	# need to select a consensus loci for a breakpoint
+# 	# using only insert size 
+# 	sv_container = BreakPointContainer(param)
+# 	p_values = []
+# 	#pval_threshold = param.get_pval_threshold()
+# 	#print "#Adjusted threshold: {0}".format(pval_threshold)
+# 	for bp in range(param.genome_length):
 
-	#print p_values
-	plt.hist(p_values,bins=50)
-	plt.show()
+
+# 		#p_val_upper_area = container[bp].calc_pvalue(exp_insert,param.stddev)
+
+# 		# do KS-2sample test
+# 		avg_isize = container[bp].calc_observed_insert()
+# 		KS_statistic, two_side_p_val = container[bp].calc_ks_test(param.true_distr) 
+# 		if two_side_p_val >=0:
+# 			p_values.append(two_side_p_val)
+# 		else: 
+# 			continue
+
+# 		if bp% 1000==0:
+# 			print bp, two_side_p_val
+# 		# obs_mean = container[bp].calc_observed_insert()
+# 		# nr_reads_over_bp = len(container[bp].reads)
+# 		# if  nr_reads_over_bp > 10:
+# 		# 	nr_obs += 1
+# 		# 	tot_mean += obs_mean
+
+
+# 		if two_side_p_val < param.pval:
+# 			if avg_isize > param.adjusted_mean:
+# 				sv_container.add_bp_to_cluster(bp,  two_side_p_val, len(container[bp].isize_list), container[bp].mean_isize, 'expansion', param.d)
+# 			else:
+# 				sv_container.add_bp_to_cluster(bp,  two_side_p_val, len(container[bp].isize_list), container[bp].mean_isize, 'contraction', param.d)
+
+# 	#print p_values
+# 	plt.hist(p_values,bins=50)
+# 	plt.show()
 		
-	return sv_container
+# 	return sv_container
 
 
+def is_significant(window,pval):
+	"""
+	The window has a misassembly according to reapers thresholds, that is 
+	, at least 80% of the bases in the window has a p-value under pval.
+	"""
+	significant = []
+	for p in window:
+		if 0 < p < pval:
+			significant.append(p)
+
+	if len(significant)/float(len(window)) >= 0.8:
+		return True
+	else:
+		return False
+
+def get_misassemly_regions(pval_file,pval,window_size):
+	window = []
+	for i, line in enumerate(pval_file):
+		[scf, pos, pos_p_val, n_obs, mean, stddev] = line.strip().split()
+		[pos, pos_p_val, n_obs, mean, stddev] = map(lambda x: float(x), [pos, pos_p_val, n_obs, mean, stddev] )
+		window.append(pos_p_val)
+		if i >= window_size:
+			if is_significant(window[-window_size:],pval):
+				print 'start', len(window) - window_size, 
+				print 'end', scf, pos, pos_p_val, n_obs ,mean, stddev
 
 
 
 def main(args):
 	param = Parameters()
-	param.d, param.pval = args.d, args.pval
-	container = ParseBAMfile(args.bampath,param)
-	sv_container = get_misassembly_clusters(container,param)
+	param.window_size, param.pval = args.window_size, args.pval
+	calc_p_values(args.bampath, open(args.pval_file,'w'), param)
+	get_misassemly_regions(open(args.pval_file,'r'),args.pval, args.window_size)
+	#sv_container = get_misassembly_clusters(container,param)
 
 	print '#Estimated library params: mean:{0} sigma:{1}'.format(param.mean,param.stddev)
 	print '#Genome length:{0}'.format(param.genome_length)
 
-	sv_container.get_final_bp_info()
-	print(sv_container)
+	#sv_container.get_final_bp_info()
+	#print(sv_container)
 	# output_breaks(sv_container)
 
 
@@ -367,8 +405,9 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description="Infer variants with simple p-value test using theory of GetDistr - proof of concept.")
 	parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
 	parser.add_argument('pval', type=float, help='p-value threshold for calling a variant. ')
-	parser.add_argument('d', type=int, help='distance threshold for clustering close p-values. All significant p-values\
-	closer than d will be clustered ')
+	parser.add_argument('window_size', type=int, help='Window size ')
+	parser.add_argument('pval_file', type=str, help='bam file with mapped reads. ')
+
 
 	# parser.add_argument('mean', type=int, help='mean insert size. ')
 	# parser.add_argument('stddev', type=int, help='Standard deviation of insert size ')
