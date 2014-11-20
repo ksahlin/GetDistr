@@ -58,7 +58,12 @@ touch reapr_results.txt
 for gap in 0 #250  500 750 1000 1250 1500
 do
         for error in {1..13};
-        do         
+        do        
+                if [ ! -f "$reapr_out"'gap_'"$gap/$error/04.break.broken_assembly.fa" ]; then
+                        echo "Reapr did not find any errors"
+                        python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in"'gap_'"$gap/$error/true_error_pos.gff" "$reapr_out"'gap_'"$gap/$error/03.score.errors.gff" "$reapr_in"'gap_'"$gap/$error/ctgs.fa" >> "reapr_results.txt"
+                        continue
+                fi 
                 python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in"'gap_'"$gap/$error/true_error_pos.gff" "$reapr_out"'gap_'"$gap/$error/03.score.errors.gff.gz" "$reapr_in"'gap_'"$gap/$error/ctgs.fa" >> "reapr_results.txt"
                 #python /home/kris/git_repos/GetDistr/scripts/reapr/parse_reapr_out.py  "$reapr_out"'gap_'"$gap/05.summary.stats.tsv" "reapr_results.txt"
         done
@@ -73,8 +78,13 @@ for gap in 0 #250  500 750 1000 1250 1500
 do
         for error in {1..13};
         do
-                QUAST -s -R "$reapr_in"'gap_'"$gap"/genome.fa -o "$quast_out"'reapr/gap_'"$gap/$error"  "$reapr_out"'gap_'"$gap/$error"/04.break.broken_assembly.fa
-                QUAST -s -R "$reapr_in"'gap_'"$gap"/genome.fa -o "$quast_out"'original/gap_'"$gap/$error"  "$reapr_in"'gap_'"$gap/$error"/ctgs.fa
+                if [ ! -f "$reapr_out"'gap_'"$gap/$error/04.break.broken_assembly.fa" ]; then
+                        echo "Reapr did not find any errors QUASTing original assembly"
+                        QUAST -s -R "$reapr_in"'gap_'"$gap/$error"/genome.fa -o "$quast_out"'reapr/gap_'"$gap/$error"  "$reapr_in"'gap_'"$gap/$error"/ctgs.fa
+                        continue
+                fi 
+                QUAST -s -R "$reapr_in"'gap_'"$gap/$error"/genome.fa -o "$quast_out"'reapr/gap_'"$gap/$error"  "$reapr_out"'gap_'"$gap/$error"/04.break.broken_assembly.fa
+                QUAST -s -R "$reapr_in"'gap_'"$gap/$error"/genome.fa -o "$quast_out"'original/gap_'"$gap/$error"  "$reapr_in"'gap_'"$gap/$error"/ctgs.fa
         done
 done
 
