@@ -45,7 +45,7 @@ def initialize_containers(args):
 	return true_breakpoints, scaffold_tp_fp
 
 def main(args):
-	outfile = open(args.outfile,'a')
+	#outfile = open(args.outfile,'a')
 	true_breakpoints, scaffold_tp_fp =  initialize_containers(args)
 	true_breakpoints = get_true_breakpoints(open(args.true_gff, 'r'), true_breakpoints)
 

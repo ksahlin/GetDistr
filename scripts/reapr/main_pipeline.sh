@@ -25,8 +25,8 @@ do
                 let "error = -1500 + ($index -1) * 250"
                 echo $error
                 #python /home/kris/git_repos/genomics_tools/scripts/main_simulate_reapr.py 5000 0 300 30 10 50 "$reapr_in"'gap_'"$gap" -sort -scafs -errors -1500 -1250 -1000 -750 -500 -250 0 250 500 750 1000 1250 1500 -burnin 4000 -nrgaps 10
-                python /home/kris/git_repos/genomics_tools/scripts/main_simulate.py 1000 $gap 300 30 10 50 "$reapr_in"'gap_'"$gap/$index" -sort -scafs -errors "$error" -burnin 4000 -nrgaps 10
-                #python /home/kris/git_repos/genomics_tools/scripts/main_simulate.py 10000 $gap 2000 500 100 100 "$reapr_in"'gap_'"$gap/$index" -sort -scafs -errors "$error" -burnin 4000000 -nrgaps 100
+                python /home/kris/git_repos/genomics_tools/scripts/main_simulate_reapr.py 1000 $gap 300 30 10 50 "$reapr_in"'gap_'"$gap/$index" -sort -scafs -errors "$error" -burnin 4000 -nrgaps 10
+                #python /home/kris/git_repos/genomics_tools/scripts/main_simulate_reapr.py 10000 $gap 2000 500 100 100 "$reapr_in"'gap_'"$gap/$index" -sort -scafs -errors "$error" -burnin 4000000 -nrgaps 100
                 
                 # Split up one scaffold with the reference at a time
                 #python split_ctgs.py "$reapr_in"'gap_'"$gap"/ctgs.fa  
@@ -39,12 +39,14 @@ done
 # running reapr
 for gap in 0 #250 500 750 1000 1250 1500
 do
+        rm -r "$reapr_out"'gap_'"$gap"
+        mkdir "$reapr_out"'gap_'"$gap"
         for error in {1..13};
         do 
+                echo "running reapr" "$reapr_out"'gap_'"$gap/$error"
+                rm -r "$reapr_out"'gap_'"$gap/$error"
                 #python /home/kris/git_repos/genomics_tools/scripts/main_simulate.py 10000 $gap 2000 500 100 100 "$reapr_in"'gap_'"$gap" -sort -scafs -errors -1500 -1250 -1000 -750 -500 -250 0 250 500 750 1000 1250 1500 -burnin 4000000 -nrgaps 100
-                echo "running reapr" "$reapr_out"'gap_'"$gap"
-                rm -r "$reapr_out"'gap_'"$gap"
-                reapr pipeline "$reapr_in"'gap_'"$gap"/ctgs_"$error".fa "$reapr_in"'gap_'"$gap"/mapped.bam "$reapr_out"'gap_'"$gap"'/'"$error"
+                reapr pipeline "$reapr_in"'gap_'"$gap/$error/ctgs.fa" "$reapr_in"'gap_'"$gap/$error/mapped.bam" "$reapr_out"'gap_'"$gap/$error"
                 #python /home/kris/git_repos/GetDistr/scripts/reapr/parse_reapr_out.py  "$reapr_out"'gap_'"$gap/05.summary.stats.tsv" "reapr_results.txt"
         done
 done
