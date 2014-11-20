@@ -25,7 +25,7 @@ do
                 let "error = -1500 + ($index -1) * 250"
                 echo $error
                 #python /home/kris/git_repos/genomics_tools/scripts/main_simulate_reapr.py 5000 0 300 30 10 50 "$reapr_in"'gap_'"$gap" -sort -scafs -errors -1500 -1250 -1000 -750 -500 -250 0 250 500 750 1000 1250 1500 -burnin 4000 -nrgaps 10
-                python /home/kris/git_repos/genomics_tools/scripts/main_simulate_reapr.py 1000 $gap 300 30 10 50 "$reapr_in"'gap_'"$gap/$index" -sort -scafs -errors "$error" -burnin 4000 -nrgaps 10
+                python /home/kris/git_repos/genomics_tools/scripts/main_simulate_reapr.py 7000 $gap 300 30 100 50 "$reapr_in"'gap_'"$gap/$index" -sort -scafs -errors "$error" -burnin 40000 -nrgaps 10
                 #python /home/kris/git_repos/genomics_tools/scripts/main_simulate_reapr.py 10000 $gap 2000 500 100 100 "$reapr_in"'gap_'"$gap/$index" -sort -scafs -errors "$error" -burnin 4000000 -nrgaps 100
                 
                 # Split up one scaffold with the reference at a time
@@ -83,8 +83,8 @@ do
                         QUAST -s -R "$reapr_in"'gap_'"$gap/$error"/genome.fa -o "$quast_out"'reapr/gap_'"$gap/$error"  "$reapr_in"'gap_'"$gap/$error"/ctgs.fa
                         continue
                 fi 
-                QUAST -s -R "$reapr_in"'gap_'"$gap/$error"/genome.fa -o "$quast_out"'reapr/gap_'"$gap/$error"  "$reapr_out"'gap_'"$gap/$error"/04.break.broken_assembly.fa
-                QUAST -s -R "$reapr_in"'gap_'"$gap/$error"/genome.fa -o "$quast_out"'original/gap_'"$gap/$error"  "$reapr_in"'gap_'"$gap/$error"/ctgs.fa
+                QUAST -s --no-plots -R "$reapr_in"'gap_'"$gap/$error"/genome.fa -o "$quast_out"'reapr/gap_'"$gap/$error"  "$reapr_out"'gap_'"$gap/$error"/04.break.broken_assembly.fa
+                QUAST -s --no-plots -R "$reapr_in"'gap_'"$gap/$error"/genome.fa -o "$quast_out"'original/gap_'"$gap/$error"  "$reapr_in"'gap_'"$gap/$error"/ctgs.fa
         done
 done
 
