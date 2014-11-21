@@ -33,7 +33,7 @@ class Parameters(object):
 		self.stddev = None
 		self.d = None
 		self.pval = None
-		self.genome_length = None
+		self.scaf_lengths = {}
 		self.nobs = None
 		self.true_distr = None
 
@@ -67,7 +67,7 @@ class Parameters(object):
 		self.nobs = n_isize
 		self.mean = mean_isize
 		self.stddev = std_dev_isize 
-		self.get_true_normal_distribution(random.sample(isize_list, 4000))
+		self.get_true_normal_distribution(random.sample(isize_list, 10000))
 
 
 	def get_true_normal_distribution(self,sample):
@@ -178,49 +178,74 @@ class BreakPointContainer(object):
 		self.clusterinfo = {}
 		self.param = param
 
-	def add_bp_to_cluster(self, pos, p_val, nr_obs, mean_obs, sv_type_observed, dist_thresh):
+	def add_bp_to_cluster(self, scf, pos, p_val, nr_obs, mean_obs, sv_type_observed, window_size):
 		new_cluster = 1
-		for (sv_type,i), cluster in self.clusters.iteritems():
+		for (sv_type, ref, i), cluster in self.clusters.iteritems():
+			if scf != ref:
+				continue
 			min_pos = min(cluster)
 			max_pos = max(cluster)
 
 			if sv_type_observed != sv_type:
 				continue
 
-			if pos <= max_pos + dist_thresh and pos >= min_pos - dist_thresh:
+			if pos <= max_pos + window_size and pos >= min_pos - window_size:
 				new_cluster = 0
 				cluster.append(pos)
-				self.clusterinfo[(sv_type,i)].append((p_val,nr_obs,mean_obs))
+				self.clusterinfo[(sv_type,scf,i)].append((p_val,nr_obs,mean_obs))
 				break
 
 		if new_cluster:
-			self.clusters[(sv_type_observed, self.index)] = [pos]
-			self.clusterinfo[(sv_type_observed, self.index)] = [(p_val,nr_obs,mean_obs)]
+			self.clusters[(sv_type_observed, scf, self.index)] = [pos]
+			self.clusterinfo[(sv_type_observed, scf, self.index)] = [(p_val,nr_obs,mean_obs)]
 			self.index += 1
 
 
 		if len(self.clusters) == 0:
-			self.clusters[(sv_type_observed, self.index)] = [pos]
-			self.clusterinfo[(sv_type_observed, self.index)] = [(p_val,nr_obs,mean_obs)]
+			self.clusters[(sv_type_observed, scf, self.index)] = [pos]
+			self.clusterinfo[(sv_type_observed, scf, self.index)] = [(p_val,nr_obs,mean_obs)]
 			self.index += 1
 
-	def get_final_bp_info(self):
+	def get_final_bp_info(self,window_size):
 		self.final_bps = []
 		for region in self.clusters:
-			n = len(self.clusters[region])
-			median_basepair = self.clusters[region][n/2]
-			median_info =  self.clusterinfo[region][n/2]
-			cluster_length_span = max(self.clusters[region]) - min(self.clusters[region]) + 1
-			self.final_bps.append((region[0],median_basepair,median_info,cluster_length_span,n))
+			start_pos = self.clusters[region][0] - window_size
+			end_pos = self.clusters[region][-1]
+			#n = len(self.clusters[region])
+			#median_basepair = self.clusters[region][n/2]
+			if self.clusters[region][0] >= (start_pos  + end_pos)/2:
+				median_info =  self.clusterinfo[region][0]
+			else:
+				median_pos = int((start_pos  + end_pos)/2)
+				i = 0
+				curr_pos = 0
+				while curr_pos < median_pos:
+					curr_pos = self.clusters[region][i]
+					i+=1
+
+				median_info =  self.clusterinfo[region][i]				
+
+			self.final_bps.append( (region[1], 'GetDistr', 'FCD', start_pos, end_pos, median_info[0],'.','.','type:{0};avg_nr_span_obs:{1};mean_obs_isize:{2}'.format(region[0], median_info[1], median_info[2]) ) )
+			#self.final_bps.append((region[0],region[1],median_basepair,median_info,cluster_length_span,n))
+
+	# def __str__(self):
+	# 	output_string= '#sv clusters:\n#<type>\t<pos>\t<cluster range>\t<nr sign. pvals in cluster>\t<info on called postion(pval,nr_obs,obs isize)>\n'
+		
+	# 	for sv_type,scf,median_basepair,median_info,cluster_length_span,n in self.final_bps:
+	# 		if median_basepair > self.param.mean and median_basepair < self.param.scaf_lengths[scf] - self.param.mean:
+	# 			output_string += '{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(sv_type,scf,median_basepair,cluster_length_span,n,median_info) 
+	# 	return output_string
 
 	def __str__(self):
-		output_string= '#sv clusters:\n#<type>\t<pos>\t<cluster range>\t<nr sign. pvals in cluster>\t<info on called postion(pval,nr_obs,obs isize)>\n'
+		"""
+			Prints GFF/GTF file of expansion and contraction regions breakpoint regions
+		"""
+		output_string= 'seqname\tsource\tfeature\tstart\tend\tscore(p_val)\tstrand\tframe\tattribute\n'
 		
-		for sv_type,median_basepair,median_info,cluster_length_span,n in self.final_bps:
-			if median_basepair > self.param.mean and median_basepair < self.param.genome_length - self.param.mean:
-				output_string += '{0}\t{1}\t{2}\t{3}\t{4}\n'.format(sv_type,median_basepair,cluster_length_span,n,median_info) 
+		for seqname, source, feature, start, end, avg_p_val, strand, frame, attribute in self.final_bps:
+			if start > self.param.mean and end < self.param.scaf_lengths[seqname] - self.param.mean:
+				output_string += '{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n'.format(seqname, source, feature, int(start), int(end), avg_p_val, strand, frame, attribute) 
 		return output_string
-
 
 def AdjustInsertsizeDist(mean_insert, std_dev_insert, insert_list):
     k = MaxObsDistr(len(insert_list), 0.95)
@@ -246,15 +271,16 @@ def calc_p_values(bamfile,outfile,param):
 		bam_filtered = ifilter(lambda r: r.flag <= 200, bam)
 		current_scaf = -1
 		print scaf_dict
+		param.scaf_lengths = scaf_dict
 		for i,read in enumerate(bam_filtered):
 			current_coord = read.pos
 			current_ref = bam.getrname(read.tid)
-			if (i + 1) %1000 == 0:
+			if (i + 1) %100000 == 0:
 				# print i
 				print 'Processing coord:{0}'.format(current_coord)
-				if (i+1) % 15000 == 0:
-				# 	print 'extra!'
-				  	break
+				# if (i+1) % 30000 == 0:
+				# # 	print 'extra!'
+				#   	break
 
 			if read.is_unmapped:
 				continue
@@ -310,7 +336,7 @@ def calc_p_values(bamfile,outfile,param):
 # 	# nr_obs =0
 # 	# est = model.NormalModel(param.mean,param.stddev,100,s_inner=0)
 # 	# # exp_stddev =  lagg till test av forvantad standard avvikelse
-# 	# exp_insert = float(est.expected_mean(1,param.genome_length))
+# 	# exp_insert = float(est.expected_mean(1,param.scaf_lengths))
 # 	# #exp_insert =  mu+ (sigma**2)/float(mu + 1)
 # 	# print '#Average predicted mean over a base pair under p_0: {0}'.format(exp_insert)
 # 	##
@@ -320,7 +346,7 @@ def calc_p_values(bamfile,outfile,param):
 # 	p_values = []
 # 	#pval_threshold = param.get_pval_threshold()
 # 	#print "#Adjusted threshold: {0}".format(pval_threshold)
-# 	for bp in range(param.genome_length):
+# 	for bp in range(param.scaf_lengths):
 
 
 # 		#p_val_upper_area = container[bp].calc_pvalue(exp_insert,param.stddev)
@@ -386,13 +412,13 @@ def get_misassemly_regions(pval_file,param):
 				avg_mean = sum(map(lambda x: x[3],w))/param.window_size
 
 				if avg_mean > param.adjusted_mean:
-					sv_container.add_bp_to_cluster(pos, avg_pval, n_obs, mean, 'expansion', param.window_size)
+					sv_container.add_bp_to_cluster(scf, pos, avg_pval, n_obs, mean, 'expansion', param.window_size)
 				else:
-					sv_container.add_bp_to_cluster(pos, avg_pval, n_obs, mean, 'contraction', param.window_size)
+					sv_container.add_bp_to_cluster(scf, pos, avg_pval, n_obs, mean, 'contraction', param.window_size)
 				#print 'start', len(window) - window_size, 
 				#print 'end', scf, pos, pos_p_val, n_obs ,mean, stddev
 
-		if pos % 10000 == 0:
+		if pos % 100000 == 0:
 			print 'Evaluating pos {0}'.format(pos)
 
 	return sv_container
@@ -403,12 +429,11 @@ def main(args):
 	param.window_size, param.pval = args.window_size, args.pval
 	calc_p_values(args.bampath, open(args.pval_file,'w'), param)
 	sv_container =  get_misassemly_regions(open(args.pval_file,'r'),param)
-	#sv_container = get_misassembly_clusters(container,param)
 
 	print '#Estimated library params: mean:{0} sigma:{1}'.format(param.mean,param.stddev)
-	print '#Genome length:{0}'.format(param.genome_length)
+	print '#Genome length:{0}'.format(param.scaf_lengths)
 
-	sv_container.get_final_bp_info()
+	sv_container.get_final_bp_info(param.window_size)
 	print(sv_container)
 	# output_breaks(sv_container)
 
