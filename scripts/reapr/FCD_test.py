@@ -252,9 +252,9 @@ def calc_p_values(bamfile,outfile,param):
 			if (i + 1) %1000 == 0:
 				# print i
 				print 'Processing coord:{0}'.format(current_coord)
-				# if (i+1) % 15000 == 0:
-				# # 	print 'extra!'
-				#   	break
+				if (i+1) % 15000 == 0:
+				# 	print 'extra!'
+				  	break
 
 			if read.is_unmapped:
 				continue
@@ -361,40 +361,55 @@ def is_significant(window,pval):
 	, at least 80% of the bases in the window has a p-value under pval.
 	"""
 	significant = []
-	for p in window:
-		if 0 < p < pval:
-			significant.append(p)
+	for pos, pos_p_val, n_obs, mean, stddev in window:
+		if 0 < pos_p_val < pval:
+			significant.append(pos_p_val)
 
 	if len(significant)/float(len(window)) >= 0.8:
 		return True
 	else:
 		return False
 
-def get_misassemly_regions(pval_file,pval,window_size):
+def get_misassemly_regions(pval_file,param):
 	window = []
-	for i, line in enumerate(pval_file):
+	sv_container = BreakPointContainer(param)
+
+	for line in pval_file:
 		[scf, pos, pos_p_val, n_obs, mean, stddev] = line.strip().split()
 		[pos, pos_p_val, n_obs, mean, stddev] = map(lambda x: float(x), [pos, pos_p_val, n_obs, mean, stddev] )
-		window.append(pos_p_val)
-		if i >= window_size:
-			if is_significant(window[-window_size:],pval):
-				print 'start', len(window) - window_size, 
-				print 'end', scf, pos, pos_p_val, n_obs ,mean, stddev
+		window.append( (pos, pos_p_val, n_obs, mean, stddev) )
+		if pos >= param.window_size:
+			w = window[-param.window_size:]
+			if is_significant(w, param.pval):
+				avg_pval = sum(map(lambda x: x[1],w))/param.window_size
+				avg_obs = sum(map(lambda x: x[2],w))/param.window_size
+				avg_mean = sum(map(lambda x: x[3],w))/param.window_size
 
+				if avg_mean > param.adjusted_mean:
+					sv_container.add_bp_to_cluster(pos, avg_pval, n_obs, mean, 'expansion', param.window_size)
+				else:
+					sv_container.add_bp_to_cluster(pos, avg_pval, n_obs, mean, 'contraction', param.window_size)
+				#print 'start', len(window) - window_size, 
+				#print 'end', scf, pos, pos_p_val, n_obs ,mean, stddev
+
+		if pos % 10000 == 0:
+			print 'Evaluating pos {0}'.format(pos)
+
+	return sv_container
 
 
 def main(args):
 	param = Parameters()
 	param.window_size, param.pval = args.window_size, args.pval
 	calc_p_values(args.bampath, open(args.pval_file,'w'), param)
-	get_misassemly_regions(open(args.pval_file,'r'),args.pval, args.window_size)
+	sv_container =  get_misassemly_regions(open(args.pval_file,'r'),param)
 	#sv_container = get_misassembly_clusters(container,param)
 
 	print '#Estimated library params: mean:{0} sigma:{1}'.format(param.mean,param.stddev)
 	print '#Genome length:{0}'.format(param.genome_length)
 
-	#sv_container.get_final_bp_info()
-	#print(sv_container)
+	sv_container.get_final_bp_info()
+	print(sv_container)
 	# output_breaks(sv_container)
 
 
