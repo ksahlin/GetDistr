@@ -273,17 +273,19 @@ def calc_p_values(bamfile,outfile,param):
 		print scaf_dict
 		param.scaf_lengths = scaf_dict
 		for i,read in enumerate(bam_filtered):
-			current_coord = read.pos
-			current_ref = bam.getrname(read.tid)
+			if read.is_unmapped:
+				continue
+			else:
+				current_coord = read.pos
+				current_ref = bam.getrname(read.tid)
+
 			if (i + 1) %100000 == 0:
 				# print i
 				print 'Processing coord:{0}'.format(current_coord)
-				# if (i+1) % 30000 == 0:
-				# # 	print 'extra!'
-				#   	break
+			# if (i+1) % 30000 == 0:
+			# # # 	print 'extra!'
+			# 	break
 
-			if read.is_unmapped:
-				continue
 			# initialize read container for new scaffold
 			if current_ref != current_scaf:
 				container = []
