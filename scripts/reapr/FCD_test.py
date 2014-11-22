@@ -288,6 +288,7 @@ def calc_p_values(bamfile,outfile,param):
 
 			# initialize read container for new scaffold
 			if current_ref != current_scaf:
+				print current_ref
 				container = []
 				scaf_length = scaf_dict[current_ref]
 
@@ -298,6 +299,9 @@ def calc_p_values(bamfile,outfile,param):
 				current_scaf = current_ref 
 			# the read pairs we want to use for calculating FCD
 			if is_proper_aligned_unique_innie(read):
+				if read.aend >= scaf_length or read.aend < 0 or read.mpos +read.rlen > scaf_length or read.pos <= 0:
+					print 'Read coordinates outside scaffold length:', read.aend, read.aend, read.mpos +read.rlen, read.pos 
+					continue
 				#print 'here'
 				if read.tlen > 0:
 					inner_start_pos = read.aend
