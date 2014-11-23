@@ -39,13 +39,18 @@ class Parameters(object):
 
 	def sample_distribution(self,bamfile):
 		isize_list = []
-		sample_size = 5000000
-		for i,read in enumerate(bamfile):
+		sample_size = 50000 
+		#i = 0
+		bam_filtered = ifilter(lambda r: is_proper_aligned_unique_innie(r), bamfile)
+		#while i <= sample_size:
+		for sample_nr,read in enumerate(bam_filtered):
 	   		## add do insert size distribution calculation if proper pair
 			if is_proper_aligned_unique_innie(read):
 				isize_list.append(abs(read.tlen))
-			if i > sample_size:
+				#sample_nr+=1
+			if sample_nr > sample_size:
 				break
+		print 'Insert size sample size:', sample_nr
 		bamfile.reset()
 
 		n_isize = float(len(isize_list))
@@ -67,7 +72,7 @@ class Parameters(object):
 		self.nobs = n_isize
 		self.mean = mean_isize
 		self.stddev = std_dev_isize 
-		self.get_true_normal_distribution(random.sample(isize_list, 10000))
+		self.get_true_normal_distribution(random.sample(isize_list, min(10000,sample_nr)))
 
 
 	def get_true_normal_distribution(self,sample):
@@ -279,6 +284,7 @@ def calc_p_values(bamfile,outfile,param):
 				current_coord = read.pos
 				current_ref = bam.getrname(read.tid)
 
+
 			if (i + 1) %100000 == 0:
 				# print i
 				print 'Processing coord:{0}'.format(current_coord)
@@ -299,10 +305,10 @@ def calc_p_values(bamfile,outfile,param):
 				current_scaf = current_ref 
 			# the read pairs we want to use for calculating FCD
 			if is_proper_aligned_unique_innie(read):
-				if current_scaf == 'scf_gap0_errorsize75' and read.pos > 2352 or read.mpos > 2350:
-					print current_scaf, read.pos, read.mpos
+				#if current_scaf == 'scf_gap0_errorsize75' and (read.pos > 2352 or read.mpos > 2350):
+				#	print current_scaf, read.pos, read.mpos
 				if read.aend >= scaf_length or read.aend < 0 or read.mpos +read.rlen > scaf_length or read.pos < 0:
-					print 'Read coordinates outside scaffold length:', read.aend, read.aend, read.mpos +read.rlen, read.pos 
+					#print 'Read coordinates outside scaffold length for {0}:'.format(current_scaf), read.aend, read.aend, read.mpos +read.rlen, read.pos 
 					continue
 				#print 'here'
 				if read.tlen > 0:
