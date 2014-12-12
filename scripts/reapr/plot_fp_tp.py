@@ -1,6 +1,7 @@
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 import matplotlib.pyplot as plt
+import argparse
 # import matplotlib.pyplot as plt
 # import numpy as np
 
@@ -29,7 +30,8 @@ class DataBase(object):
 		self.data = {}
 	def read_in_data(self,result_file):
 		for line in result_file:
-			gap, error, TP, FP = map(lambda x: int(x),line.strip.split())
+			gap, error, TP, FP = line.strip().split()
+			gap, error, TP, FP = map(lambda x: int(x),[gap, error, TP, FP])
 			if gap not in self.data:
 				self.data[gap]= {}
 				self.data[gap][error] = {'TP':TP,'FP':FP}
@@ -54,7 +56,7 @@ class DataBase(object):
 			return TPs,FPs
 
 	def get_error_sizes(self):
-		gap = self.data[self.data.keys()[0]]
+		gap = self.data.keys()[0]
 		return sorted(map(lambda key: key, self.data[gap]))
 
 	def get_gap_sizes(self):
@@ -120,7 +122,7 @@ def main(args):
 if __name__ == '__main__':
     ##
     # Take care of input
-	parser = argparse.ArgumentParser(description="Infer variants with simple p-value test using theory of GetDistr - proof of concept.")
+	parser = argparse.ArgumentParser(description="Plot results of correctly estimated variants.")
 	parser.add_argument('result_file', type=str, help='Path to result file. ')
 
 	# parser.add_argument('mean', type=int, help='mean insert size. ')
