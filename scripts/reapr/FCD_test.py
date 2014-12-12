@@ -5,6 +5,7 @@ Created on Sep 18, 2013
 '''
 
 import argparse
+import os
 from mathstats.normaldist.normal import MaxObsDistr
 from scipy.stats import ks_2samp,norm
 import random
@@ -37,7 +38,7 @@ class Parameters(object):
 		self.nobs = None
 		self.true_distr = None
 
-	def sample_distribution(self,bamfile):
+	def sample_distribution(self,bamfile,outfile):
 		isize_list = []
 		sample_size = 50000 
 		#i = 0
@@ -50,14 +51,14 @@ class Parameters(object):
 				#sample_nr+=1
 			if sample_nr > sample_size:
 				break
-		print 'Insert size sample size:', sample_nr
+		print >> outfile, 'Insert size sample size:', sample_nr
 		bamfile.reset()
 
 		n_isize = float(len(isize_list))
 		mean_isize = sum(isize_list)/n_isize
 		std_dev_isize =  (sum(list(map((lambda x: x ** 2 - 2 * x * mean_isize + mean_isize ** 2), isize_list))) / (n_isize - 1)) ** 0.5
-		print '#Mean before filtering :', mean_isize
-		print '#Stddev before filtering: ', std_dev_isize
+		print >> outfile,'#Mean before filtering :', mean_isize
+		print >> outfile,'#Stddev before filtering: ', std_dev_isize
 		extreme_obs_occur = True
 		while extreme_obs_occur:
 			extreme_obs_occur, filtered_list = AdjustInsertsizeDist(mean_isize, std_dev_isize, isize_list)
@@ -66,16 +67,16 @@ class Parameters(object):
 			std_dev_isize = (sum(list(map((lambda x: x ** 2 - 2 * x * mean_isize + mean_isize ** 2), filtered_list))) / (n_isize - 1)) ** 0.5
 			isize_list = filtered_list
 
-		print '#Mean converged:', mean_isize
-		print '#Std_est converged: ', std_dev_isize
+		print >> outfile,'#Mean converged:', mean_isize
+		print >> outfile,'#Std_est converged: ', std_dev_isize
 
 		self.nobs = n_isize
 		self.mean = mean_isize
 		self.stddev = std_dev_isize 
-		self.get_true_normal_distribution(random.sample(isize_list, min(10000,sample_nr)))
+		self.get_true_normal_distribution(random.sample(isize_list, min(10000,sample_nr)),outfile)
 
 
-	def get_true_normal_distribution(self,sample):
+	def get_true_normal_distribution(self,sample,outfile):
 		read_len = 100
 		softclipps = 0
 		#self.temp_cdf = {}
@@ -101,7 +102,7 @@ class Parameters(object):
 		self.adjusted_mean = sum(self.true_distr)/float(len(self.true_distr))
 		self.adjusted_stddev = (sum(list(map((lambda x: x ** 2 - 2 * x * self.adjusted_mean + self.adjusted_mean ** 2), self.true_distr))) / (n - 1)) ** 0.5
 
-		print 'Corrected mean:{0}, corrected stddev:{1}'.format(self.adjusted_mean, self.adjusted_stddev)
+		print >> outfile,'Corrected mean:{0}, corrected stddev:{1}'.format(self.adjusted_mean, self.adjusted_stddev)
 		# for x in range(2*(read_len-softclipps) +1,self.mean + 6*self.stddev):
 
 		# norm.pdf()
@@ -261,13 +262,13 @@ def AdjustInsertsizeDist(mean_insert, std_dev_insert, insert_list):
         return(False, filtered_list)
 
 
-def calc_p_values(bamfile,outfile,param):
+def calc_p_values(bamfile,outfile,param, info_file):
 
 	p_values = []
 	with pysam.Samfile(bamfile, 'rb') as bam:
 
 		#sample true distribution
-		param.sample_distribution(bam)
+		param.sample_distribution(bam, info_file)
 
 		# start scoring
 		#reference_tids = map(lambda x: bam.gettid(x),bam.references )
@@ -275,7 +276,7 @@ def calc_p_values(bamfile,outfile,param):
 		scaf_dict = dict(zip(bam.references, reference_lengths))
 		bam_filtered = ifilter(lambda r: r.flag <= 200, bam)
 		current_scaf = -1
-		print scaf_dict
+		print >> info_file, scaf_dict
 		param.scaf_lengths = scaf_dict
 		for i,read in enumerate(bam_filtered):
 			if read.is_unmapped:
@@ -287,14 +288,14 @@ def calc_p_values(bamfile,outfile,param):
 
 			if (i + 1) %100000 == 0:
 				# print i
-				print 'Processing coord:{0}'.format(current_coord)
+				print >> info_file, 'Processing coord:{0}'.format(current_coord)
 			# if (i+1) % 30000 == 0:
 			# # # 	print 'extra!'
 			# 	break
 
 			# initialize read container for new scaffold
 			if current_ref != current_scaf:
-				print current_ref
+				print >> info_file, current_ref
 				container = []
 				scaf_length = scaf_dict[current_ref]
 
@@ -410,7 +411,7 @@ def is_significant(window,pval):
 	else:
 		return False
 
-def get_misassemly_regions(pval_file,param):
+def get_misassemly_regions(pval_file,param, info_file):
 	window = []
 	sv_container = BreakPointContainer(param)
 
@@ -433,22 +434,30 @@ def get_misassemly_regions(pval_file,param):
 				#print 'end', scf, pos, pos_p_val, n_obs ,mean, stddev
 
 		if pos % 100000 == 0:
-			print 'Evaluating pos {0}'.format(pos)
+			print >> info_file, 'Evaluating pos {0}'.format(pos)
 
 	return sv_container
 
 
 def main(args):
 	param = Parameters()
-	param.window_size, param.pval = args.window_size, args.pval
-	calc_p_values(args.bampath, open(args.pval_file,'w'), param)
-	sv_container =  get_misassemly_regions(open(args.pval_file,'r'),param)
+	if not os.path.exists(args.outfolder):
+		os.makedirs(args.outfolder)
+	gff_file = open(os.path.join(args.outfolder,'estimated_misassm.gff'),'w')
+	info_file = open(os.path.join(args.outfolder,'info.txt'),'w')
+	pval_file_out = open(os.path.join(args.outfolder,'p_values.txt'),'w')
 
-	print '#Estimated library params: mean:{0} sigma:{1}'.format(param.mean,param.stddev)
-	print '#Genome length:{0}'.format(param.scaf_lengths)
+	param.window_size, param.pval = args.window_size, args.pval
+	calc_p_values(args.bampath, pval_file_out, param, info_file)
+	pval_file_out.close()
+	pval_file_in = open(os.path.join(args.outfolder,'p_values.txt'),'r')
+	sv_container =  get_misassemly_regions(pval_file_in,param, info_file) #open(args.pval_file,'r')
+
+	print >> info_file, '#Estimated library params: mean:{0} sigma:{1}'.format(param.mean,param.stddev)
+	print >> info_file,'#Genome length:{0}'.format(param.scaf_lengths)
 
 	sv_container.get_final_bp_info(param.window_size)
-	print(sv_container)
+	print >> gff_file, str(sv_container)
 	# output_breaks(sv_container)
 
 
@@ -460,7 +469,7 @@ if __name__ == '__main__':
 	parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
 	parser.add_argument('pval', type=float, help='p-value threshold for calling a variant. ')
 	parser.add_argument('window_size', type=int, help='Window size ')
-	parser.add_argument('pval_file', type=str, help='bam file with mapped reads. ')
+	parser.add_argument('outfolder', type=str, help='Outfolder. ')
 
 
 	# parser.add_argument('mean', type=int, help='mean insert size. ')

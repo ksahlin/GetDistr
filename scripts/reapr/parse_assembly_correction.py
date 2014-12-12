@@ -17,14 +17,15 @@ def is_true_positive(pred_scaf,pred_start, pred_stop, true_breakpoints ):
 def compare_misassemblies(scafs, infile, true_breakpoints, scaffold_tp_fp):
 	for line in infile:
 		values = line.strip().split()
-		scaf_name = values[0]
-		
-		if values[2] == 'FCD' or values[2] == 'FCD_gap':
-			start,stop = int(line.strip().split()[3]), int(line.strip().split()[4])
-			if is_true_positive(scaf_name, start, stop,true_breakpoints):
-				scaffold_tp_fp[scaf_name][0] += 1
-			else:
-				scaffold_tp_fp[scaf_name][1] += 1
+		if values:
+			scaf_name = values[0]
+			
+			if values[2] == 'FCD' or values[2] == 'FCD_gap':
+				start,stop = int(line.strip().split()[3]), int(line.strip().split()[4])
+				if is_true_positive(scaf_name, start, stop,true_breakpoints):
+					scaffold_tp_fp[scaf_name][0] += 1
+				else:
+					scaffold_tp_fp[scaf_name][1] += 1
 
 	return scaffold_tp_fp	
 
