@@ -1,4 +1,4 @@
-
+import re
 import gzip
 import argparse
 from genomics_tools.file_formats.fasta import fasta_iter
@@ -57,7 +57,23 @@ def main(args):
 	scaffold_tp_fp = compare_misassemblies( args.scafs, tool_results, true_breakpoints, scaffold_tp_fp)
 
 	for scaf_name, (TP,FP) in scaffold_tp_fp.iteritems():
-		print '{0}\t{1}\t{2}'.format(scaf_name, TP,FP)
+		#scf_gap100_errorsize_minus50
+		#scf_gap0_errorsize_50
+		result = re.search('gap[0-9]+',scaf_name)
+		if result:
+			gap = result.group(0)[3:]
+		else:
+			continue
+		
+		result = re.search('errorsize[0-9]+',scaf_name)
+		if result:
+			error = result.group(0)[9:]
+		else:
+			result = re.search('minus[0-9]+',scaf_name)
+			error = '-'+result.group(0)[5:]
+
+		print '{0}\t{1}\t{2}\t{3}'.format(gap, error, TP,FP)
+		#print '{0}\t{1}\t{2}'.format(scaf_name, TP,FP)
 # 	print >> outfile, 'type\t#errors'
 # 	for line in open(args.infile.strip(),'r'):
 # 		if line[0] == '#':
