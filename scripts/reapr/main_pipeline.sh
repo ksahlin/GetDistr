@@ -20,7 +20,7 @@ module add bwa
 
 echo "Simulating"
 
-for gap in 0 #250 500 750 1000 1250 1500
+for gap in 0 250 500 750 1000 1250 1500
 do
         for index in 1  # {1..13};
         do         
@@ -43,7 +43,7 @@ done
 # running reapr
 for distr in normal uniform
 do
-        for gap in 0 #250 500 750 1000 1250 1500
+        for gap in 0 250 500 750 1000 1250 1500
         do
                 rm -r "$reapr_out$distr"'_gap_'"$gap" 
                 mkdir "$reapr_out$distr"'_gap_'"$gap"   
@@ -66,7 +66,7 @@ for distr in normal uniform
 do 
         d=$(date '+%y-%m-%d-%H_%M_%S')
         reapr_results='reapr-'"$distr"'-'"$d"'.txt'
-        touch "$reapr_results"
+        touch "data/$reapr_results"
         for gap in 0 #250  500 750 1000 1250 1500
         do
                 for error in 1 # {1..13};
@@ -74,23 +74,26 @@ do
 
                                 if [ ! -f "$reapr_out$distr"'_gap_'"$gap/$error/04.break.broken_assembly.fa" ]; then
                                         echo "Reapr did not find any errors"
-                                        python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in$distr"'_gap_'"$gap/$error/true_error_pos.gff" "$reapr_out$distr"'_gap_'"$gap/$error/03.score.errors.gff" "$reapr_in$distr"'_gap_'"$gap/$error/ctgs.fa" >> "$reapr_results"
+                                        python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in$distr"'_gap_'"$gap/$error/true_error_pos.gff" "$reapr_out$distr"'_gap_'"$gap/$error/03.score.errors.gff" "$reapr_in$distr"'_gap_'"$gap/$error/ctgs.fa" >> "data/$reapr_results"
                                         continue
                                 fi 
-                                python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in$distr"'_gap_'"$gap/$error/true_error_pos.gff" "$reapr_out$distr"'_gap_'"$gap/$error/03.score.errors.gff.gz" "$reapr_in$distr"'_gap_'"$gap/$error/ctgs.fa" >> "$reapr_results"
+                                python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in$distr"'_gap_'"$gap/$error/true_error_pos.gff" "$reapr_out$distr"'_gap_'"$gap/$error/03.score.errors.gff.gz" "$reapr_in$distr"'_gap_'"$gap/$error/ctgs.fa" >> "data/$reapr_results"
                                 #python /home/kris/git_repos/GetDistr/scripts/reapr/parse_reapr_out.py  "$reapr_out"'gap_'"$gap/05.summary.stats.tsv" "reapr_results.txt"
                 done
         done
 done
 
 # Running our detector
-
+echo "running KS detector" 
 for distr in normal uniform
 do 
-        for gap in 0 #250 500 750 1000 1250 1500
+        for gap in 0 250 500 750 1000 1250 1500
         do
+                rm -r "$getdistr_out$distr"'_gap_'"$gap"
+                mkdir "$getdistr_out$distr"'_gap_'"$gap"
                 for error in 1 # {1..13};
                 do 
+                        echo "running KS" "$getdistr_out$distr"'_gap_'"$gap/$error"
                         python /home/kris/git_repos/GetDistr/scripts/reapr/FCD_test.py "$reapr_in$distr"'_gap_'"$gap/$error/mapped.bam" 0.0000075 1500 "$getdistr_out$distr"'_gap_'"$gap/$error"
                         #python /home/kris/git_repos/GetDistr/scripts/reapr/parse_reapr_out.py  "$reapr_out"'gap_'"$gap/05.summary.stats.tsv" "reapr_results.txt"
                 done
@@ -103,13 +106,13 @@ for distr in normal uniform
 do 
         d=$(date '+%y-%m-%d-%H_%M_%S')
         getdistr_results='getdistr-'"$distr"'-'"$d"'.txt'
-        touch "$getdistr_results"
-        for gap in 0 #250  500 750 1000 1250 1500
+        touch "data/$getdistr_results"
+        for gap in 0 250  500 750 1000 1250 1500
         do
                 for error in 1 # {1..13};
                 do       
 
-                        python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in$distr"'_gap_'"$gap/$error/true_error_pos.gff" "$getdistr_out$distr"'_gap_'"$gap/$error/estimated_misassm.gff" "$reapr_in$distr"'_gap_'"$gap/$error/ctgs.fa" >> "$getdistr_results"
+                        python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in$distr"'_gap_'"$gap/$error/true_error_pos.gff" "$getdistr_out$distr"'_gap_'"$gap/$error/estimated_misassm.gff" "$reapr_in$distr"'_gap_'"$gap/$error/ctgs.fa" >> "data/$getdistr_results"
                 done
         done
 done
