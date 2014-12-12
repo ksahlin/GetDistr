@@ -58,9 +58,7 @@ do
 done
 
 
-#rm reapr_results.txt
-touch "$reapr_uniform_file"
-touch "$reapr_normal_file"
+# PARSE reaprs results
 
 for distr in normal uniform
 do 
@@ -82,14 +80,35 @@ do
                 done
         done
 done
+
 # Running our detector
 
-for gap in 0 #250 500 750 1000 1250 1500
-do
-        for error in 1 # {1..13};
-        do 
-                python /home/kris/git_repos/GetDistr/scripts/reapr/FCD_test.py "$reapr_in"'_'"$distr"'_gap_'"$gap/$error/mapped.bam" 0.0000075 1500 "$getdistr_out"'_'"$distr"'_gap_'"$gap/$error"
-                #python /home/kris/git_repos/GetDistr/scripts/reapr/parse_reapr_out.py  "$reapr_out"'gap_'"$gap/05.summary.stats.tsv" "reapr_results.txt"
+for distr in normal uniform
+do 
+        for gap in 0 #250 500 750 1000 1250 1500
+        do
+                for error in 1 # {1..13};
+                do 
+                        python /home/kris/git_repos/GetDistr/scripts/reapr/FCD_test.py "$reapr_in"'_'"$distr"'_gap_'"$gap/$error/mapped.bam" 0.0000075 1500 "$getdistr_out"'_'"$distr"'_gap_'"$gap/$error"
+                        #python /home/kris/git_repos/GetDistr/scripts/reapr/parse_reapr_out.py  "$reapr_out"'gap_'"$gap/05.summary.stats.tsv" "reapr_results.txt"
+                done
+        done
+done
+
+#Parse our results
+
+for distr in normal uniform
+do 
+        d=$(date '+%y/%m/%d/%H:%M:%S')
+        getdistr_results='getdistr-'"$distr"'-'"$d"'-.txt'
+
+        for gap in 0 #250  500 750 1000 1250 1500
+        do
+                for error in 1 # {1..13};
+                do       
+
+                        python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in"'_'"$distr"'_gap_'"$gap/$error/true_error_pos.gff" "$getdistr_out"'_'"$distr"'_gap_'"$gap/$error/estimated_misassm.gff" "$reapr_in"'_'"$distr"'_gap_'"$gap/$error/ctgs.fa" >> "$getdistr_results"
+                done
         done
 done
 
