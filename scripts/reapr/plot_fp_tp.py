@@ -62,7 +62,7 @@ class DataBase(object):
 	def get_gap_sizes(self):
 		return sorted(map(lambda key: key, self.data))
 
-def plot(database):
+def plot(database,outfile):
 
 	fig = plt.figure()
 	ax = fig.add_subplot(111, projection='3d')
@@ -108,15 +108,15 @@ def plot(database):
 	ax.set_yticks(errorsizes)
 	ax.set_yticklabels( errorsizes )
 
-
-	plt.show()
+	plt.savefig(open(outfile+'.png','w'))
+	#plt.show()
 
 
 def main(args):
 	database = DataBase()
 	database.read_in_data(open(args.result_file,'r'))
 	#data = parse_result_file()
-	plot(database)
+	plot(database,args.outfile)
 
 
 if __name__ == '__main__':
@@ -124,6 +124,7 @@ if __name__ == '__main__':
     # Take care of input
 	parser = argparse.ArgumentParser(description="Plot results of correctly estimated variants.")
 	parser.add_argument('result_file', type=str, help='Path to result file. ')
+	parser.add_argument('outfile', type=str, help='Path to plot file. ')
 
 	# parser.add_argument('mean', type=int, help='mean insert size. ')
 	# parser.add_argument('stddev', type=int, help='Standard deviation of insert size ')

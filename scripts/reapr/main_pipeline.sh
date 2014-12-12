@@ -70,7 +70,7 @@ for distr in normal uniform
 do 
         
         #mkdir 'data'"$d"
-        reapr_results='$out/reapr-'"$distr"'-.txt'
+        reapr_results="$out"'/reapr-'"$distr"'-.txt'
         touch "$reapr_results"
         for gap in 0 #250  500 750 1000 1250 1500
         do
@@ -114,7 +114,7 @@ do
         # getdistr_results='getdistr-'"$distr"'-'"$d"'.txt'
         # touch "data/$getdistr_results"
 
-        getdistr_results='$out/getdistr-'"$distr"'-.txt'
+        getdistr_results="$out"'/getdistr-'"$distr"'-.txt'
         touch "$getdistr_results"
         for gap in 0 250  500 750 1000 1250 1500
         do
@@ -125,6 +125,20 @@ do
                 done
         done
 done
+
+# PLOT RESULTS
+
+for distr in normal uniform
+do 
+
+        getdistr_results="$out"'/getdistr-'"$distr"'-.txt'
+        reapr_results="$out"'/reapr-'"$distr"'-.txt'
+   
+        python /home/kris/git_repos/GetDistr/scripts/reapr/plot_fp_tp.py "$getdistr_results" "$out"'getdistr-'"$distr"
+        python /home/kris/git_repos/GetDistr/scripts/reapr/plot_fp_tp.py "$reapr_results" "$out"'reapr-'"$distr"
+
+done
+
 
 # run QUAST
 # for gap in 0 #250  500 750 1000 1250 1500
