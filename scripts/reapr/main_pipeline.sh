@@ -41,20 +41,20 @@ done
 
 
 # running reapr
-for gap in 0 #250 500 750 1000 1250 1500
+for distr in normal uniform
 do
-        
-        mkdir "$reapr_out"'gap_'"$gap"
-        for error in  1 # {1..13};
-        do 
-                for distr in normal uniform
-                do
-                        #rm -r "$reapr_out"'gap_'"$gap"
-                        echo "running reapr" "$reapr_out$distr"'_gap_'"$gap/$error"
-                        rm -r "$reapr_out$distr"'_gap_'"$gap/$error"
-                #python /home/kris/git_repos/genomics_tools/scripts/main_simulate.py 10000 $gap 2000 500 100 100 "$reapr_in"'gap_'"$gap" -sort -scafs -errors -1500 -1250 -1000 -750 -500 -250 0 250 500 750 1000 1250 1500 -burnin 4000000 -nrgaps 100
-                        reapr pipeline "$reapr_in$distr"'_gap_'"$gap/$error/ctgs.fa" "$reapr_in$distr"'_gap_'"$gap/$error/mapped.bam" "$reapr_out$distr"'_gap_'"$gap/$error"
-                #python /home/kris/git_repos/GetDistr/scripts/reapr/parse_reapr_out.py  "$reapr_out"'gap_'"$gap/05.summary.stats.tsv" "reapr_results.txt"
+        for gap in 0 #250 500 750 1000 1250 1500
+        do
+                rm -r "$reapr_out$distr"'_gap_'"$gap" 
+                mkdir "$reapr_out$distr"'_gap_'"$gap"   
+                for error in  1 # {1..13};
+                do 
+                                echo "running reapr" "$reapr_out$distr"'_gap_'"$gap/$error"
+                                #rm -r "$reapr_out$distr"'_gap_'"$gap/$error"
+
+                        #python /home/kris/git_repos/genomics_tools/scripts/main_simulate.py 10000 $gap 2000 500 100 100 "$reapr_in"'gap_'"$gap" -sort -scafs -errors -1500 -1250 -1000 -750 -500 -250 0 250 500 750 1000 1250 1500 -burnin 4000000 -nrgaps 100
+                                reapr pipeline "$reapr_in$distr"'_gap_'"$gap/$error/ctgs.fa" "$reapr_in$distr"'_gap_'"$gap/$error/mapped.bam" "$reapr_out$distr"'_gap_'"$gap/$error"
+                        #python /home/kris/git_repos/GetDistr/scripts/reapr/parse_reapr_out.py  "$reapr_out"'gap_'"$gap/05.summary.stats.tsv" "reapr_results.txt"
                 done
         done
 done
@@ -64,7 +64,7 @@ done
 
 for distr in normal uniform
 do 
-        d=$(date '+%y/%m/%d/%H:%M:%S')
+        d=$(date '+%y-%m-%d-%H_%M_%S')
         reapr_results='reapr-'"$distr"'-'"$d"'.txt'
         touch "$reapr_results"
         for gap in 0 #250  500 750 1000 1250 1500
@@ -72,7 +72,7 @@ do
                 for error in 1 # {1..13};
                 do       
 
-                                if [ ! -f "$reapr_out"'_'"$distr"'_gap_'"$gap/$error/04.break.broken_assembly.fa" ]; then
+                                if [ ! -f "$reapr_out$distr"'_gap_'"$gap/$error/04.break.broken_assembly.fa" ]; then
                                         echo "Reapr did not find any errors"
                                         python /home/kris/git_repos/GetDistr/scripts/reapr/parse_assembly_correction.py "$reapr_in$distr"'_gap_'"$gap/$error/true_error_pos.gff" "$reapr_out$distr"'_gap_'"$gap/$error/03.score.errors.gff" "$reapr_in$distr"'_gap_'"$gap/$error/ctgs.fa" >> "$reapr_results"
                                         continue
@@ -101,7 +101,7 @@ done
 
 for distr in normal uniform
 do 
-        d=$(date '+%y/%m/%d/%H:%M:%S')
+        d=$(date '+%y-%m-%d-%H_%M_%S')
         getdistr_results='getdistr-'"$distr"'-'"$d"'.txt'
         touch "$getdistr_results"
         for gap in 0 #250  500 750 1000 1250 1500
