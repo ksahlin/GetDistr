@@ -72,7 +72,7 @@ do
         #mkdir 'data'"$d"
         reapr_results="$out"'/reapr-'"$distr"'-.txt'
         touch "$reapr_results"
-        for gap in 0 #250  500 750 1000 1250 1500
+        for gap in 0 250  500 750 1000 1250 1500
         do
                 for error in 1 # {1..13};
                 do       
@@ -134,8 +134,8 @@ do
         getdistr_results="$out"'/getdistr-'"$distr"'-.txt'
         reapr_results="$out"'/reapr-'"$distr"'-.txt'
    
-        python /home/kris/git_repos/GetDistr/scripts/reapr/plot_fp_tp.py "$getdistr_results" "$out"'getdistr-'"$distr"
-        python /home/kris/git_repos/GetDistr/scripts/reapr/plot_fp_tp.py "$reapr_results" "$out"'reapr-'"$distr"
+        python /home/kris/git_repos/GetDistr/scripts/reapr/plot_fp_tp.py "$getdistr_results" "$out"'/getdistr-'"$distr"
+        python /home/kris/git_repos/GetDistr/scripts/reapr/plot_fp_tp.py "$reapr_results" "$out"'/reapr-'"$distr"
 
 done
 

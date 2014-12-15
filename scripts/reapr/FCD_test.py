@@ -9,7 +9,7 @@ import os
 from mathstats.normaldist.normal import MaxObsDistr
 from scipy.stats import ks_2samp,norm
 import random
-
+import re
 
 import pysam
 #import math
@@ -20,11 +20,43 @@ import bisect
 from Queue import Queue
 
 import matplotlib.pyplot as plt
+from statsmodels.distributions.empirical_distribution import ECDF
+
+EMPIRICAL_BINS = 200
 
 def is_proper_aligned_unique_innie(read):
     return (read.is_reverse and not read.mate_is_reverse and read.is_read1 and read.tlen < 0 and read.rname == read.mrnm) or \
                 (not read.is_reverse and read.mate_is_reverse and read.is_read1 and read.tlen > 0 and read.rname == read.mrnm ) \
                 and not read.mate_is_unmapped and read.mapq > 10 and not read.is_secondary
+
+def ReadInContigseqs(contigfile,contig_filter_length):
+    cont_dict = {}
+    k = 0
+    temp = ''
+    accession = ''
+    for line in contigfile:
+        if line[0] == '>' and k == 0:
+            accession = line[1:].strip().split()[0]
+            cont_dict[accession] = ''
+            k += 1
+        elif line[0] == '>':
+            cont_dict[accession] = temp
+            temp = ''
+            accession = line[1:].strip().split()[0]
+        else:
+            temp += line.strip()
+    cont_dict[accession] = temp
+
+    # for contig in cont_dict.keys():
+    #     print 'Initial length:', len(cont_dict[contig])
+    if contig_filter_length:
+        singled_out = 0
+        for contig in cont_dict.keys():
+            if len(cont_dict[contig]) < contig_filter_length:
+                del cont_dict[contig]
+                singled_out += 1
+    return(cont_dict)
+
 
 class Parameters(object):
 	"""docstring for Parameters"""
@@ -73,6 +105,8 @@ class Parameters(object):
 		self.nobs = n_isize
 		self.mean = mean_isize
 		self.stddev = std_dev_isize 
+		self.full_ECDF = ECDF(isize_list)
+		self.adjustedECDF_no_gap = None
 		self.get_true_normal_distribution(random.sample(isize_list, min(10000,sample_nr)),outfile)
 
 
@@ -110,8 +144,100 @@ class Parameters(object):
 		
 		# total_weight = 
 
+
 	#def cdf(x):
 	#	return self.cdf
+
+
+	def get_weight(self,x,gap_coordinates,r,s):
+		if not gap_coordinates:
+			return x - (2*(r-s)-1)
+		total_restriction_positions_left = 0
+		total_restriction_positions_right = 0
+
+		for start,stop in gap_coordinates:
+			if  x < start:
+				total_restriction_positions_right += 0
+			elif  (r-s)-1 <= start  <= x:
+				#print '1'
+				total_restriction_positions_right += min(stop,x) - start  + (r-s)-1
+			
+			elif 0 <= start <= (r-s)-1:
+				#print '2'
+				total_restriction_positions_right += min(stop,x)
+
+			elif stop < -x:
+				total_restriction_positions_left += 0
+
+			elif -x <= stop < -( (r-s)-1):
+				#print '3'
+				total_restriction_positions_left += stop - max(start,-x)  + (r-s)-1
+				
+			elif -( (r-s)-1) <= stop <= 0:
+				#print '4'
+				total_restriction_positions_left += -(max(start,-x))
+
+			elif start <0 and stop > 0:
+				#print '5'
+				total_restriction_positions_right +=  max(stop,(r-s))
+				total_restriction_positions_left += - min(start,-(r-s))
+
+		#print 'tot restrict:', total_restriction_positions
+		total_restriction_positions_right = max(total_restriction_positions_right,s)
+		total_restriction_positions_left = max(total_restriction_positions_left,s)
+		weight = x - total_restriction_positions_right - total_restriction_positions_left
+		#print weight
+		return max( 0 , weight)
+
+
+
+			# elif stop <= 0 and -stop < x < -start:
+			# 	pass
+			# elif start <0 and stop > 0:
+			# 	pass
+		
+		return 
+
+	def get_correct_ECDF(self,outfile, gap_coordinates):
+		if not gap_coordinates and self.adjustedECDF_no_gap:
+			return self.adjustedECDF_no_gap
+
+
+		read_len = 100
+		softclipps = 0
+
+		cdf_list = [ self.full_ECDF( 2*(read_len-softclipps)) * self.get_weight(2*(read_len-softclipps), gap_coordinates, read_len, softclipps)  ] #[ self.full_ECDF( 2*(read_len-softclipps)) * self.get_weight(2*(read_len-softclipps), gap_coordinates, read_len, softclipps) ]
+		stepsize =  (int(self.mean + 4*self.stddev) - (2*(read_len-softclipps) +1)) / EMPIRICAL_BINS
+		x_min = max(2*(read_len-softclipps) , int(self.mean - 4*self.stddev) )
+		x_max = int(self.mean + 5*self.stddev)
+
+		for x in range( x_min + stepsize , x_max, stepsize):
+			increment_area = self.get_weight(x,gap_coordinates, read_len, softclipps) * (self.full_ECDF(x) - self.full_ECDF(x-stepsize))
+			#increment_area = norm.pdf(x, self.mean, self.stddev) * (x-(2*(read_len-softclipps)-1))
+			cdf_list.append( cdf_list[-1] + increment_area)
+
+		tot_cdf = cdf_list[-1]
+		cdf_list_normalized = map(lambda x: x /float(tot_cdf),cdf_list)
+
+		# Now create a weighted sample
+		self.true_distr = []
+		for i in range(1000):
+			obs = random.uniform(0, 1)
+			pos = bisect.bisect(cdf_list_normalized, obs) - 1
+			#print obs, pos
+			self.true_distr.append(pos + 2*(read_len-softclipps))
+
+		# initialization of no gap true distribution
+		if not gap_coordinates:
+			print 'getting initial gap free distr.'
+			self.adjustedECDF_no_gap = self.true_distr
+
+		n = len(self.true_distr)
+		self.adjusted_mean = sum(self.true_distr)/float(len(self.true_distr))
+		self.adjusted_stddev = (sum(list(map((lambda x: x ** 2 - 2 * x * self.adjusted_mean + self.adjusted_mean ** 2), self.true_distr))) / (n - 1)) ** 0.5
+
+		#print >> outfile,'Corrected mean:{0}, corrected stddev:{1}, gap_coordinates: {2}'.format(self.adjusted_mean, self.adjusted_stddev, gap_coordinates)
+		return self.true_distr
 
 class ReadContainer(object):
 	"""docstring for ReadContainer"""
@@ -262,7 +388,7 @@ def AdjustInsertsizeDist(mean_insert, std_dev_insert, insert_list):
         return(False, filtered_list)
 
 
-def calc_p_values(bamfile,outfile,param, info_file):
+def calc_p_values(bamfile,outfile,param, info_file,assembly_dict):
 
 	p_values = []
 	with pysam.Samfile(bamfile, 'rb') as bam:
@@ -305,25 +431,37 @@ def calc_p_values(bamfile,outfile,param, info_file):
 					container.append(ReadContainer(i))
 				current_scaf = current_ref 
 			# the read pairs we want to use for calculating FCD
-			if is_proper_aligned_unique_innie(read):
+			# also, we follow reaprs suggestion and remove read pairs that are further away than
+			# 1.5*param.mean from the position of interest. First we can safely remove anything
+			# bigger than 3*param.mean (because at least one read of this read pair
+			# is going to be further away than 1.5*mean from the position of interest in this read pair )
+			if is_proper_aligned_unique_innie(read) and abs(read.tlen) <= 3*param.mean:
 				#if current_scaf == 'scf_gap0_errorsize75' and (read.pos > 2352 or read.mpos > 2350):
 				#	print current_scaf, read.pos, read.mpos
 				if read.aend >= scaf_length or read.aend < 0 or read.mpos +read.rlen > scaf_length or read.pos < 0:
 					#print 'Read coordinates outside scaffold length for {0}:'.format(current_scaf), read.aend, read.aend, read.mpos +read.rlen, read.pos 
 					continue
-				#print 'here'
+	
+				# Here we only add the observations that are not
+				# further away than the pairs 1.5*param.mean < obs < 3*param.mean 
+				if abs(read.tlen) > 1.5*param.mean:
+					excluded_region_size = int(abs(read.tlen) - 1.5*param.mean)
+					#print 'LOOOOOOL'
+				else:
+					excluded_region_size = 0
+
 				if read.tlen > 0:
 					inner_start_pos = read.aend
 					inner_end_pos = read.mpos
-					#print inner_start_pos, inner_end_pos
-					for pos in range(inner_start_pos,inner_end_pos):
+
+					for pos in range(inner_start_pos + excluded_region_size, inner_end_pos - excluded_region_size):
 						container[scaf_length - pos].add_read(read)
 						#container[pos].add_read(read2)
 				else:
 					inner_start_pos = read.mpos +read.rlen
 					inner_end_pos = read.pos
-					#print inner_start_pos, inner_end_pos
-					for pos in range(inner_start_pos,inner_end_pos):
+
+					for pos in range(inner_start_pos + excluded_region_size, inner_end_pos - excluded_region_size):
 						container[scaf_length - pos].add_read(read)
 						#container[pos].add_read(read2)
 
@@ -332,9 +470,26 @@ def calc_p_values(bamfile,outfile,param, info_file):
 
 				while scaf_length - len(container) < current_coord:
 					#print 'lloollzz',current_coord, scaf_length - len(container)
-					# do ks_2_sample
+					
+					#print container[-1].position, current_ref
+					# get true distribution
+					if container[-1].position % 100 == 0:
+						print 'position', container[-1].position
+					sequence_in_window = assembly_dict[ current_ref ][container[-1].position - int(1.5*param.mean) : container[-1].position + int(1.5*param.mean) ]
+					p = re.compile("[Nn]+")
+					gap_coordinates = []
+					for m in p.finditer(sequence_in_window):
+						gap_coordinates.append((m.start() - int(1.5*param.mean) ,m.end() - int(1.5*param.mean) ))
+						#print m.start(), m.end(), m.group()
+						#print gap_coordinates
+					true_distribution = param.get_correct_ECDF(outfile, gap_coordinates)
 					container[-1].calc_observed_insert()
-					KS_statistic, two_side_p_val = container[-1].calc_ks_test(param.true_distr) 
+					KS_statistic, two_side_p_val = container[-1].calc_ks_test(true_distribution) 
+
+
+					# do ks_2_sample
+					#container[-1].calc_observed_insert()
+					#KS_statistic, two_side_p_val = container[-1].calc_ks_test(param.true_distr) 
 					if two_side_p_val > 0:
 						p_values.append(two_side_p_val)
 					# write chromosome, coord, p_val to file
@@ -448,7 +603,9 @@ def main(args):
 	pval_file_out = open(os.path.join(args.outfolder,'p_values.txt'),'w')
 
 	param.window_size, param.pval = args.window_size, args.pval
-	calc_p_values(args.bampath, pval_file_out, param, info_file)
+
+	assembly_dict = ReadInContigseqs(open(args.assembly_file,'r'),param.window_size)
+	calc_p_values(args.bampath, pval_file_out, param, info_file,assembly_dict)
 	pval_file_out.close()
 	pval_file_in = open(os.path.join(args.outfolder,'p_values.txt'),'r')
 	sv_container =  get_misassemly_regions(pval_file_in,param, info_file) #open(args.pval_file,'r')
@@ -467,6 +624,8 @@ if __name__ == '__main__':
     # Take care of input
 	parser = argparse.ArgumentParser(description="Infer variants with simple p-value test using theory of GetDistr - proof of concept.")
 	parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
+	parser.add_argument('assembly_file', type=str, help='Fasta file with assembly. ')
+
 	parser.add_argument('pval', type=float, help='p-value threshold for calling a variant. ')
 	parser.add_argument('window_size', type=int, help='Window size ')
 	parser.add_argument('outfolder', type=str, help='Outfolder. ')
