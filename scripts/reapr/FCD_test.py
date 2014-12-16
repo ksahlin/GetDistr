@@ -217,19 +217,21 @@ class Parameters(object):
 
 
 		read_len = 100
-		softclipps = 0
+		softclipps = 80
 
 
 		x_min = max(2*(read_len-softclipps) , int(self.mean - 5*self.stddev) )
 		x_max = int(self.mean + 5*self.stddev)
 		stepsize =  (x_max - x_min) / EMPIRICAL_BINS
-		cdf_list = [ self.full_ECDF( x_min) * self.get_weight(2*(read_len-softclipps), gap_coordinates, read_len, softclipps)  ] #[ self.full_ECDF( 2*(read_len-softclipps)) * self.get_weight(2*(read_len-softclipps), gap_coordinates, read_len, softclipps) ]
+		cdf_list = [ self.full_ECDF( x_min) * self.get_weight(x_min, gap_coordinates, read_len, softclipps)  ] #[ self.full_ECDF( 2*(read_len-softclipps)) * self.get_weight(2*(read_len-softclipps), gap_coordinates, read_len, softclipps) ]
 
+
+		# create weigted (true) distribution
 
 		for x in range( x_min + stepsize , x_max, stepsize):
 			increment_area = self.get_weight(x,gap_coordinates, read_len, softclipps) * (self.full_ECDF(x) - self.full_ECDF(x-stepsize))
-			#increment_area = norm.pdf(x, self.mean, self.stddev) * (x-(2*(read_len-softclipps)-1))
 			cdf_list.append( cdf_list[-1] + increment_area)
+		# cdf_list = [self.get_weight(x,gap_coordinates, read_len, softclipps) * (self.full_ECDF(x) - self.full_ECDF(x-stepsize)) ]
 
 		#print 'stepsize:', stepsize
 		#print 'BINS:',len(cdf_list)
@@ -237,12 +239,14 @@ class Parameters(object):
 		cdf_list_normalized = map(lambda x: x /float(tot_cdf),cdf_list)
 
 		# Now create a weighted sample
-		self.true_distr = []
-		for i in range(1000):
-			obs = random.uniform(0, 1)
-			pos = bisect.bisect(cdf_list_normalized, obs) - 1
-			#print obs, pos
-			self.true_distr.append(pos*stepsize + x_min)
+
+		# self.true_distr = []
+		# for i in range(1000):
+		# 	obs = random.uniform(0, 1)
+		# 	pos = bisect.bisect(cdf_list_normalized, obs) - 1
+		# 	self.true_distr.append(pos*stepsize + x_min)
+
+		self.true_distr = [ (bisect.bisect(cdf_list_normalized, random.uniform(0, 1) ) - 1)*stepsize + x_min for i in range(1000) ]
 
 		# initialization of no gap true distribution
 		if not gap_coordinates:
@@ -369,7 +373,7 @@ class BreakPointContainer(object):
 			region_nr_obs = map(lambda x:x[1], self.clusterinfo[region])
 			avg_region_nr_obs = sum(region_nr_obs)/len(region_nr_obs)
 			region_mean_obs = map(lambda x:x[2], self.clusterinfo[region])
-			avg_region_mean_obs = sum(region_pvalues)/len(region_mean_obs)
+			avg_region_mean_obs = sum(region_mean_obs)/len(region_mean_obs)
 			# if self.clusters[region][0] >= (start_pos  + end_pos)/2:
 			# 	median_info =  self.clusterinfo[region][0]
 			# else:
@@ -454,6 +458,8 @@ def calc_p_values(bamfile,outfile,param, info_file,assembly_dict):
 			# bigger than 3*param.mean (because at least one read of this read pair
 			# is going to be further away than 1.5*mean from the position of interest in this read pair )
 			if is_proper_aligned_unique_innie(read) and abs(read.tlen) <= 3*param.mean:
+				#if abs(read.tlen) > 700:
+				#	print read.tlen, read.pos,current_scaf
 				#if current_scaf == 'scf_gap0_errorsize75' and (read.pos > 2352 or read.mpos > 2350):
 				#	print current_scaf, read.pos, read.mpos
 				if read.aend >= scaf_length or read.aend < 0 or read.mpos +read.rlen > scaf_length or read.pos < 0:
@@ -467,6 +473,7 @@ def calc_p_values(bamfile,outfile,param, info_file,assembly_dict):
 					#print 'LOOOOOOL'
 				else:
 					excluded_region_size = 0
+
 
 				if read.tlen > 0:
 					inner_start_pos = read.aend
@@ -491,7 +498,7 @@ def calc_p_values(bamfile,outfile,param, info_file,assembly_dict):
 					
 					#print container[-1].position, current_ref
 					# get true distribution
-					if container[-1].position % 10000 == 0:
+					if container[-1].position % 1000 == 0:
 						print 'position', container[-1].position
 					sequence_in_window = assembly_dict[ current_ref ][container[-1].position - int(1.5*param.mean) : container[-1].position + int(1.5*param.mean) ]
 					p = re.compile("[Nn]+")
@@ -606,7 +613,7 @@ def get_misassemly_regions(pval_file,param, info_file):
 				#print 'start', len(window) - window_size, 
 				#print 'end', scf, pos, pos_p_val, n_obs ,mean, stddev
 
-		if pos % 100000 == 0:
+		if pos % 10000 == 0:
 			#print 'Evaluating pos {0}'.format(pos)
 			print >> info_file, 'Evaluating pos {0}'.format(pos)
 

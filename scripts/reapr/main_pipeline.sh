@@ -22,12 +22,17 @@ stddev=50
 min=350
 max=650
 cov=100
+window_size=300
+pval=0.01
 declare -a gaps=("0" "250" "500" "750" "1000" "1250" "1500")
 declare -a errors=("-1500" "-1250" "-1000" "-750" "-500" "-250" "0" "250" "500" "750" "1000" "1250" "1500")
 #######
 
 #######
 # Paths to files being generated
+rm 'data-'"$mean-$stddev-$cov"
+mkdir 'data-'"$mean-$stddev-$cov"
+out='data-'"$mean-$stddev-$cov"
 mkdir 'data-'"$mean-$stddev-$cov"
 out='data-'"$mean-$stddev-$cov"
 outdir='/proj/b2013169/private/data/getdistr/reapr/'"$mean-$stddev-$cov/"
@@ -123,7 +128,7 @@ do
                 for error in 1 # {1..13};
                 do 
                         echo "running KS" "$getdistr_out$distr"'_gap_'"$gap/$error"
-                        python /home/kris/git_repos/GetDistr/scripts/reapr/FCD_test.py "$reapr_in$distr"'_gap_'"$gap/$error/mapped.bam"  "$reapr_in$distr"'_gap_'"$gap/$error/ctgs.fa"  0.05 "$mean" "$getdistr_out$distr"'_gap_'"$gap/$error"
+                        python /home/kris/git_repos/GetDistr/scripts/reapr/FCD_test.py "$reapr_in$distr"'_gap_'"$gap/$error/mapped.bam"  "$reapr_in$distr"'_gap_'"$gap/$error/ctgs.fa"  "$pval" "$window_size" "$getdistr_out$distr"'_gap_'"$gap/$error"
                         #python /home/kris/git_repos/GetDistr/scripts/reapr/parse_reapr_out.py  "$reapr_out"'gap_'"$gap/05.summary.stats.tsv" "reapr_results.txt"
                 done
         done
