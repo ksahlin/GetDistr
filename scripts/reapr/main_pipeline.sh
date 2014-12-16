@@ -33,15 +33,17 @@ out='data-'"$mean-$stddev-$cov"
 outdir='/proj/b2013169/private/data/getdistr/reapr/'"$mean-$stddev-$cov/"
 reapr_in="$outdir"'input/' #'/proj/b2013169/private/data/getdistr/reapr/input/'
 reapr_out="$outdir"'output/' # '/proj/b2013169/private/data/getdistr/reapr/output/'
+#quast_out='/proj/b2013169/private/data/getdistr/reapr/quast/'
+getdistr_out="$outdir"'getdistr/' # '/proj/b2013169/private/data/getdistr/reapr/getdistr/'
 if [ ! -d $outdir ]; then
         mkdir $outdir
 fi
 if [ ! -d $reapr_out ]; then
         mkdir $reapr_out
 fi
-#quast_out='/proj/b2013169/private/data/getdistr/reapr/quast/'
-getdistr_out="$outdir"'getdistr/' # '/proj/b2013169/private/data/getdistr/reapr/getdistr/'
-
+if [ ! -d $getdistr_out ]; then
+        mkdir $getdistr_out
+fi
 echo "Simulating"
 
 for gap in "${gaps[@]}"

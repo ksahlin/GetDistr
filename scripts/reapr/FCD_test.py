@@ -623,6 +623,9 @@ def main(args):
 
 	if args.window_size >= 1000:
 		param.window_size = args.window_size/2 
+	else:
+		param.window_size = args.window_size
+
 	param.pval = args.pval
 
 	assembly_dict = ReadInContigseqs(open(args.assembly_file,'r'),param.window_size)
