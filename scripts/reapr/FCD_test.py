@@ -10,6 +10,7 @@ from mathstats.normaldist.normal import MaxObsDistr
 from scipy.stats import ks_2samp,norm
 import random
 import re
+import math
 
 import pysam
 #import math
@@ -23,6 +24,7 @@ import matplotlib.pyplot as plt
 from statsmodels.distributions.empirical_distribution import ECDF
 
 EMPIRICAL_BINS = 200
+SAMPLE_SIZE = 50000  # for estimating true full read pair distribution
 
 def is_proper_aligned_unique_innie(read):
     return (read.is_reverse and not read.mate_is_reverse and read.is_read1 and read.tlen < 0 and read.rname == read.mrnm) or \
@@ -69,10 +71,20 @@ class Parameters(object):
 		self.scaf_lengths = {}
 		self.nobs = None
 		self.true_distr = None
+		self.corrected_pval = None
+
+	def get_pval_threshold(self):
+		mean_sd = t.ppf( 0.975, self.nobs - 1 ) * self.stddev / math.sqrt( self.nobs )
+		sd_sd = math.sqrt( (self.nobs - 1) * self.stddev**2 / chi2.ppf( 0.025, self.nobs - 1 ) )
+
+		mean_conservative = self.mean + mean_sd
+		sd_conservative = sd_sd
+
+		z = norm.ppf( self.pval / 2.0, mean_conservative, sd_conservative )
+		return norm.cdf( z, self.mean, self.stddev )
 
 	def sample_distribution(self,bamfile,outfile):
 		isize_list = []
-		sample_size = 50000 
 		#i = 0
 		bam_filtered = ifilter(lambda r: is_proper_aligned_unique_innie(r), bamfile)
 		#while i <= sample_size:
@@ -81,7 +93,7 @@ class Parameters(object):
 			if is_proper_aligned_unique_innie(read):
 				isize_list.append(abs(read.tlen))
 				#sample_nr+=1
-			if sample_nr > sample_size:
+			if sample_nr > SAMPLE_SIZE:
 				break
 		print >> outfile, 'Insert size sample size:', sample_nr
 		bamfile.reset()
@@ -157,21 +169,22 @@ class Parameters(object):
 
 		for start,stop in gap_coordinates:
 			if  x < start:
-				total_restriction_positions_right += 0
+				continue #total_restriction_positions_right += 0
+
 			elif  (r-s)-1 <= start  <= x:
 				#print '1'
-				total_restriction_positions_right += min(stop,x) - start  + (r-s)-1
+				total_restriction_positions_right += min(stop + (r-s)-1, x) - start  + (r-s)-1
 			
 			elif 0 <= start <= (r-s)-1:
 				#print '2'
-				total_restriction_positions_right += min(stop,x)
+				total_restriction_positions_right += min(stop + (r-s)-1, x) 
 
 			elif stop < -x:
-				total_restriction_positions_left += 0
+				total_restriction_positions_left += (r-s)
 
 			elif -x <= stop < -( (r-s)-1):
 				#print '3'
-				total_restriction_positions_left += stop - max(start,-x)  + (r-s)-1
+				total_restriction_positions_left += stop - max(start - (r-s)-1 ,-x)  + (r-s)-1
 				
 			elif -( (r-s)-1) <= stop <= 0:
 				#print '4'
@@ -179,14 +192,14 @@ class Parameters(object):
 
 			elif start <0 and stop > 0:
 				#print '5'
-				total_restriction_positions_right +=  max(stop,(r-s))
-				total_restriction_positions_left += - min(start,-(r-s))
+				total_restriction_positions_right +=  stop + (r-s)
+				total_restriction_positions_left += - start + (r-s)
 
 		#print 'tot restrict:', total_restriction_positions
 		total_restriction_positions_right = max(total_restriction_positions_right,s)
 		total_restriction_positions_left = max(total_restriction_positions_left,s)
 		weight = x - total_restriction_positions_right - total_restriction_positions_left
-		#print weight
+
 		return max( 0 , weight)
 
 
@@ -206,16 +219,20 @@ class Parameters(object):
 		read_len = 100
 		softclipps = 0
 
-		cdf_list = [ self.full_ECDF( 2*(read_len-softclipps)) * self.get_weight(2*(read_len-softclipps), gap_coordinates, read_len, softclipps)  ] #[ self.full_ECDF( 2*(read_len-softclipps)) * self.get_weight(2*(read_len-softclipps), gap_coordinates, read_len, softclipps) ]
-		stepsize =  (int(self.mean + 4*self.stddev) - (2*(read_len-softclipps) +1)) / EMPIRICAL_BINS
-		x_min = max(2*(read_len-softclipps) , int(self.mean - 4*self.stddev) )
+
+		x_min = max(2*(read_len-softclipps) , int(self.mean - 5*self.stddev) )
 		x_max = int(self.mean + 5*self.stddev)
+		stepsize =  (x_max - x_min) / EMPIRICAL_BINS
+		cdf_list = [ self.full_ECDF( x_min) * self.get_weight(2*(read_len-softclipps), gap_coordinates, read_len, softclipps)  ] #[ self.full_ECDF( 2*(read_len-softclipps)) * self.get_weight(2*(read_len-softclipps), gap_coordinates, read_len, softclipps) ]
+
 
 		for x in range( x_min + stepsize , x_max, stepsize):
 			increment_area = self.get_weight(x,gap_coordinates, read_len, softclipps) * (self.full_ECDF(x) - self.full_ECDF(x-stepsize))
 			#increment_area = norm.pdf(x, self.mean, self.stddev) * (x-(2*(read_len-softclipps)-1))
 			cdf_list.append( cdf_list[-1] + increment_area)
 
+		#print 'stepsize:', stepsize
+		#print 'BINS:',len(cdf_list)
 		tot_cdf = cdf_list[-1]
 		cdf_list_normalized = map(lambda x: x /float(tot_cdf),cdf_list)
 
@@ -225,7 +242,7 @@ class Parameters(object):
 			obs = random.uniform(0, 1)
 			pos = bisect.bisect(cdf_list_normalized, obs) - 1
 			#print obs, pos
-			self.true_distr.append(pos + 2*(read_len-softclipps))
+			self.true_distr.append(pos*stepsize + x_min)
 
 		# initialization of no gap true distribution
 		if not gap_coordinates:
@@ -235,6 +252,8 @@ class Parameters(object):
 		n = len(self.true_distr)
 		self.adjusted_mean = sum(self.true_distr)/float(len(self.true_distr))
 		self.adjusted_stddev = (sum(list(map((lambda x: x ** 2 - 2 * x * self.adjusted_mean + self.adjusted_mean ** 2), self.true_distr))) / (n - 1)) ** 0.5
+
+		#print 'Corrected mean:{0}, corrected stddev:{1}, gap_coordinates: {2}'.format(self.adjusted_mean, self.adjusted_stddev, gap_coordinates)
 
 		#print >> outfile,'Corrected mean:{0}, corrected stddev:{1}, gap_coordinates: {2}'.format(self.adjusted_mean, self.adjusted_stddev, gap_coordinates)
 		return self.true_distr
@@ -345,28 +364,27 @@ class BreakPointContainer(object):
 			end_pos = self.clusters[region][-1]
 			#n = len(self.clusters[region])
 			#median_basepair = self.clusters[region][n/2]
-			if self.clusters[region][0] >= (start_pos  + end_pos)/2:
-				median_info =  self.clusterinfo[region][0]
-			else:
-				median_pos = int((start_pos  + end_pos)/2)
-				i = 0
-				curr_pos = 0
-				while curr_pos < median_pos:
-					curr_pos = self.clusters[region][i]
-					i+=1
+			region_pvalues = map(lambda x:x[0], self.clusterinfo[region])
+			avg_region_pvalue = sum(region_pvalues)/len(region_pvalues)
+			region_nr_obs = map(lambda x:x[1], self.clusterinfo[region])
+			avg_region_nr_obs = sum(region_nr_obs)/len(region_nr_obs)
+			region_mean_obs = map(lambda x:x[2], self.clusterinfo[region])
+			avg_region_mean_obs = sum(region_pvalues)/len(region_mean_obs)
+			# if self.clusters[region][0] >= (start_pos  + end_pos)/2:
+			# 	median_info =  self.clusterinfo[region][0]
+			# else:
+			# 	median_pos = int((start_pos  + end_pos)/2)
+			# 	i = 0
+			# 	curr_pos = 0
+			# 	while curr_pos < median_pos:
+			# 		curr_pos = self.clusters[region][i]
+			# 		i+=1
 
-				median_info =  self.clusterinfo[region][i]				
+			# 	median_info =  self.clusterinfo[region][i]				
 
-			self.final_bps.append( (region[1], 'GetDistr', 'FCD', start_pos, end_pos, median_info[0],'.','.','type:{0};avg_nr_span_obs:{1};mean_obs_isize:{2}'.format(region[0], median_info[1], median_info[2]) ) )
-			#self.final_bps.append((region[0],region[1],median_basepair,median_info,cluster_length_span,n))
-
-	# def __str__(self):
-	# 	output_string= '#sv clusters:\n#<type>\t<pos>\t<cluster range>\t<nr sign. pvals in cluster>\t<info on called postion(pval,nr_obs,obs isize)>\n'
-		
-	# 	for sv_type,scf,median_basepair,median_info,cluster_length_span,n in self.final_bps:
-	# 		if median_basepair > self.param.mean and median_basepair < self.param.scaf_lengths[scf] - self.param.mean:
-	# 			output_string += '{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(sv_type,scf,median_basepair,cluster_length_span,n,median_info) 
-	# 	return output_string
+			self.final_bps.append( (region[1], 'GetDistr', 'FCD', start_pos, end_pos, avg_region_pvalue,'.','.','type:{0};avg_nr_span_obs:{1};mean_obs_isize:{2}'.format(region[0], avg_region_nr_obs, avg_region_mean_obs) ) )
+			#self.final_bps.append( (region[1], 'GetDistr', 'FCD', start_pos, end_pos, median_info[0],'.','.','type:{0};avg_nr_span_obs:{1};mean_obs_isize:{2}'.format(region[0], median_info[1], median_info[2]) ) )
+			
 
 	def __str__(self):
 		"""
@@ -473,7 +491,7 @@ def calc_p_values(bamfile,outfile,param, info_file,assembly_dict):
 					
 					#print container[-1].position, current_ref
 					# get true distribution
-					if container[-1].position % 100 == 0:
+					if container[-1].position % 10000 == 0:
 						print 'position', container[-1].position
 					sequence_in_window = assembly_dict[ current_ref ][container[-1].position - int(1.5*param.mean) : container[-1].position + int(1.5*param.mean) ]
 					p = re.compile("[Nn]+")
@@ -589,6 +607,7 @@ def get_misassemly_regions(pval_file,param, info_file):
 				#print 'end', scf, pos, pos_p_val, n_obs ,mean, stddev
 
 		if pos % 100000 == 0:
+			#print 'Evaluating pos {0}'.format(pos)
 			print >> info_file, 'Evaluating pos {0}'.format(pos)
 
 	return sv_container
@@ -602,10 +621,13 @@ def main(args):
 	info_file = open(os.path.join(args.outfolder,'info.txt'),'w')
 	pval_file_out = open(os.path.join(args.outfolder,'p_values.txt'),'w')
 
-	param.window_size, param.pval = args.window_size, args.pval
+	if args.window_size >= 1000:
+		param.window_size = args.window_size/2 
+	param.pval = args.pval
 
 	assembly_dict = ReadInContigseqs(open(args.assembly_file,'r'),param.window_size)
 	calc_p_values(args.bampath, pval_file_out, param, info_file,assembly_dict)
+	#param.corrected_pval = param.get_pval_threshold()
 	pval_file_out.close()
 	pval_file_in = open(os.path.join(args.outfolder,'p_values.txt'),'r')
 	sv_container =  get_misassemly_regions(pval_file_in,param, info_file) #open(args.pval_file,'r')
