@@ -23,16 +23,14 @@ min=350
 max=650
 cov=100
 window_size=300
-pval=0.01
+pval=0.05
 declare -a gaps=("0" "250" "500" "750" "1000" "1250" "1500")
 declare -a errors=("-1500" "-1250" "-1000" "-750" "-500" "-250" "0" "250" "500" "750" "1000" "1250" "1500")
 #######
 
 #######
 # Paths to files being generated
-rm 'data-'"$mean-$stddev-$cov"
-mkdir 'data-'"$mean-$stddev-$cov"
-out='data-'"$mean-$stddev-$cov"
+rm -r 'data-'"$mean-$stddev-$cov"
 mkdir 'data-'"$mean-$stddev-$cov"
 out='data-'"$mean-$stddev-$cov"
 outdir='/proj/b2013169/private/data/getdistr/reapr/'"$mean-$stddev-$cov/"

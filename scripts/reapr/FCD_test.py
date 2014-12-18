@@ -480,14 +480,21 @@ def calc_p_values(bamfile,outfile,param, info_file,assembly_dict):
 					inner_end_pos = read.mpos
 
 					for pos in range(inner_start_pos + excluded_region_size, inner_end_pos - excluded_region_size):
-						container[scaf_length - pos].add_read(read)
+						try:
+							container[scaf_length - pos].add_read(read)
 						#container[pos].add_read(read2)
+						except IndexError:
+							print 'Tried adding read pair to position {0}. On scaffold {1} with length {2}, with container of size {3}'.format(pos, current_scaf, scaf_length, len(container)) 
 				else:
 					inner_start_pos = read.mpos +read.rlen
 					inner_end_pos = read.pos
 
 					for pos in range(inner_start_pos + excluded_region_size, inner_end_pos - excluded_region_size):
-						container[scaf_length - pos].add_read(read)
+						try:
+							container[scaf_length - pos].add_read(read)
+						except IndexError:
+							print 'Tried adding read pair to position {0}. On scaffold {1} with length {2}, with container of size {3}'.format(pos, current_scaf, scaf_length, len(container)) 
+
 						#container[pos].add_read(read2)
 
 			# write positions out to file
