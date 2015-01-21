@@ -128,7 +128,7 @@ if __name__ == '__main__':
     parser.add_argument('read1', type=str, help='Path to reads1. ')
     parser.add_argument('read2', type=str, help='Path to reads2. ')
     parser.add_argument('output_path', type=str, help='path to folder output. ')
-    parser.add_argument( '-sort', dest='sort', action='store_true', default=False, help='Coordinate sort the reads in the bam file' )
+    parser.add_argument( '-sort', dest='sort', action='store_false', default=True, help='Coordinate sort the reads in the bam file' )
     parser.add_argument( '-sam', dest='sam', action='store_true', default=False, help='Output a samfile (default is bam)' )
     #parser.add_argument( '-errors', dest='errorsize', type=int, nargs='+', default=False, help='gap distance error' )
     #parser.add_argument( '-nrgaps', dest='nrgaps', type=int, default=False, help='Number of gaps' )
