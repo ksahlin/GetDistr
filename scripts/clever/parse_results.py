@@ -1,6 +1,6 @@
 import re
-import gzip
 import argparse
+import os, sys
 from genomics_tools.file_formats.fasta import fasta_iter
 
 def is_true_positive(pred_scaf,pred_start, pred_stop, true_breakpoints ):
@@ -56,33 +56,69 @@ def initialize_containers():
 
 def main(args):
 	#outfile = open(args.outfile,'a')
-	true_breakpoints, variants_TP_FP =  initialize_containers()
-	true_breakpoints = get_true_breakpoints(true_breakpoints, args.variant_size)
+	#rootdir = 'C:/Users/sid/Desktop/test'
+	prev_variant_size = None
+	for subdir, dirs, files in os.walk(args.rootdir):
 
-	variants_TP_FP = compare_misassemblies( open(args.clever_breaks,'r'), true_breakpoints, variants_TP_FP)
-	print variants_TP_FP
-	# for ref_name, (TP,FP) in variants_TP_FP.iteritems():
-	# 	result = re.search('gap[0-9]+',scaf_name)
-	# 	if result:
-	# 		gap = result.group(0)[3:]
-	# 	else:
-	# 		continue
-		
-	# 	result = re.search('errorsize[0-9]+',scaf_name)
-	# 	if result:
-	# 		error = result.group(0)[9:]
-	# 	else:
-	# 		result = re.search('minus[0-9]+',scaf_name)
-	# 		error = '-'+result.group(0)[5:]
+	    for file in files:
+			file_path = os.path.join(subdir, file)
+			# print os.path.join(subdir, file)
+			result = re.search('[0-9]+',file_path)
+			variant_size = int(result.group())
+			result = re.search('del',file_path)
+			if result:
+				variant_size = -variant_size
 
-	# 	print '{0}\t{1}\t{2}\t{3}'.format(gap, error, TP,FP)
+			true_breakpoints, variants_TP_FP =  initialize_containers()
+			true_breakpoints = get_true_breakpoints(true_breakpoints, variant_size)
+			variants_TP_FP = compare_misassemblies( open(file_path,'r'), true_breakpoints, variants_TP_FP)
+
+			TPs = 0
+			FPs = 0
+			for ref_name, (TP,FP) in variants_TP_FP.iteritems():
+				TPs += TP
+				FPs += FP
+
+			if variant_size == prev_variant_size:
+				print ' {0} $ {1} \\\ '.format( TPs,FPs)
+			else:
+				sys.stdout.write('{0} $ {1} $ {2} $'.format(variant_size, TPs,FPs))
+			prev_variant_size = variant_size
+
+
+			# print os.path.join(subdir, file)
+			# result = re.search('[0-9]+',os.path.join(subdir, file))
+			# variant_size = int(result.group())
+
+			# true_breakpoints, variants_TP_FP_original,variants_TP_FP_corrected =  initialize_containers()
+			# true_breakpoints = get_true_breakpoints(true_breakpoints, variant_size)
+
+			# variants_TP_FP_original = compare_misassemblies( open(file,'r'), true_breakpoints, variants_TP_FP_original)
+			# variants_TP_FP_corrected = compare_misassemblies( open(args.clever_corr_breaks,'r'), true_breakpoints, variants_TP_FP_corrected)
+
+			# TPs_orig = 0
+			# FPs_orig = 0
+			# TPs_corr = 0
+			# FPs_corr = 0
+			# for (ref_name_orig, (TP_orig,FP_orig)) , (ref_name_corr, (TP_corr,FP_corr)) in zip(variants_TP_FP_original.iteritems(), variants_TP_FP_corrected.iteritems()) :
+			# 	TPs_orig += TP_orig
+			# 	FPs_orig += FP_orig
+			# 	TPs_corr += TP_corr
+			# 	FPs_corr += FP_corr
+
+			# print '{0} $ {1} $ {2} $ {3} $ {4} '.format(variant_size, TPs_orig,FPs_orig,TPs_corr,FPs_corr)
+
+
 
 if __name__ == '__main__':
     ##
     # Take care of input
-    parser = argparse.ArgumentParser(description="Parse reapr's results.")    
-    parser.add_argument('clever_breaks', type=str, help="Tool's predicted SVs. ")
-    parser.add_argument('variant_size', type=int, help=" scaffold fasta file." )
+    parser = argparse.ArgumentParser(description="Parse reapr's results.")   
+    parser.add_argument('rootdir', type=str, help="root result folder ")
+
+    #parser.add_argument('clever_breaks', type=str, help="Tool's predicted SVs. ")
+    #parser.add_argument('clever_corr_breaks', type=str, help="Tool's predicted SVs. ")
+    #parser.add_argument('variant_size', type=int, help=" scaffold fasta file." )
     #parser.add_argument('outfile', type=str, help="Tools results. ")
 
     args = parser.parse_args()
