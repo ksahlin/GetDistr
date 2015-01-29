@@ -146,17 +146,6 @@ def estimate_library_parameters(bam_path, list_of_obs, low, high, soft=None):
     sigma = sqrt(sample_obs_sum_sq /number_of_obs_sum - mu**2 )      #/ number_of_obs_sum_sq - mu**2)
     return(mu,sigma)
 
-# def estimate_library_stddev(list_of_obs, mu, weighted_sum, r, a, soft=None):
-#     sample_obs_sum = 0
-#     number_of_obs_sum = 0
-#     for o in list_of_obs:
-#         weight = float(w(o, r, a, s=soft, infer_lib_mean=True))
-#         sample_obs_sum += o / weight
-#         number_of_obs_sum += 1 / weight
-#     print sample_obs_sum / number_of_obs_sum
-#     return(sample_obs_sum / number_of_obs_sum)   
-
-#     raise NotImplementedError
 
 
 

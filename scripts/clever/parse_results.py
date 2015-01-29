@@ -34,7 +34,7 @@ def compare_misassemblies(infile, true_breakpoints, scaffold_tp_fp):
 def get_true_breakpoints(true_breakpoints,variant_size):
 	
 	for i  in range(100):
-		variant_start = 10000 + i*(8000 + min(0, variant_size)) #0 if insertion else negative
+		variant_start = 10000 + i*(20000 + min(0, variant_size)) #0 if insertion else negative
 		if variant_size > 0: # insertion in donor
 			variant_stop = variant_start + 1
 		else: #deletion in donor
@@ -49,7 +49,7 @@ def get_true_breakpoints(true_breakpoints,variant_size):
 def initialize_containers():
 	variants_TP_FP = {}
 	true_breakpoints = {}
-	for acc in ['sequence_0-donor','newer_1-donor','sequence_2-donor','sequence_3-donor','sequence_4-donor','newer_2-donor','new1-donor']:
+	for acc in ['sequence_0-donor','newer_1-donor','sequence_2-donor','sequence_3-donor','sequence_4-donor','newer_2-donor','new1-donor','sequence_0','newer_1','sequence_2','sequence_3','sequence_4','newer_2','new1']:
 		variants_TP_FP[acc] = [0,0]
 		true_breakpoints[acc] = set()
 	return true_breakpoints, variants_TP_FP
@@ -80,9 +80,9 @@ def main(args):
 				FPs += FP
 
 			if variant_size == prev_variant_size:
-				print ' {0} $ {1} \\\ '.format( TPs,FPs)
+				print ' {0} & {1} \\\ '.format( TPs,FPs)
 			else:
-				sys.stdout.write('{0} $ {1} $ {2} $'.format(variant_size, TPs,FPs))
+				sys.stdout.write('{0} & {1} & {2} &'.format(variant_size, TPs,FPs))
 			prev_variant_size = variant_size
 
 
