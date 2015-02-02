@@ -6,7 +6,7 @@ import random
 import pysam
 
 EMPIRICAL_BINS = 500
-SAMPLE_SIZE = 50000  # for estimating true full read pair distribution
+SAMPLE_SIZE = 500000  # for estimating true full read pair distribution
 
 
 def AdjustInsertsizeDist(mean_insert, std_dev_insert, insert_list):
@@ -20,11 +20,18 @@ def AdjustInsertsizeDist(mean_insert, std_dev_insert, insert_list):
 
 def is_proper_aligned_unique_innie(read):
 	return not read.is_unmapped and \
-				(read.is_reverse and not read.mate_is_reverse and read.is_read1 and read.tlen < 0 ) or \
-	            (not read.is_reverse and read.mate_is_reverse and read.is_read1 and read.tlen > 0 ) \
-				or (read.is_reverse and not read.mate_is_reverse and read.is_read2 and read.tlen < 0 ) or \
-				(not read.is_reverse and read.mate_is_reverse and read.is_read2 and read.tlen > 0 ) \
+				( (read.is_reverse and not read.mate_is_reverse  and read.tlen < 0 ) or \
+	            (not read.is_reverse and read.mate_is_reverse  and read.tlen > 0 ) ) \
 	            and not read.mate_is_unmapped and read.mapq > 10 and not read.is_secondary and read.rname == read.mrnm 
+
+
+# def is_proper_aligned_unique_innie(read):
+# 	return not read.is_unmapped and \
+# 				(read.is_reverse and not read.mate_is_reverse and read.is_read1 and read.tlen < 0 ) or \
+# 	            (not read.is_reverse and read.mate_is_reverse and read.is_read1 and read.tlen > 0 ) \
+# 				or (read.is_reverse and not read.mate_is_reverse and read.is_read2 and read.tlen < 0 ) or \
+# 				(not read.is_reverse and read.mate_is_reverse and read.is_read2 and read.tlen > 0 ) \
+# 	            and not read.mate_is_unmapped and read.mapq > 10 and not read.is_secondary and read.rname == read.mrnm 
 
 class LibrarySampler(object):
 	"""docstring for LibrarySampler"""
@@ -34,6 +41,41 @@ class LibrarySampler(object):
 		self.outfile = open(outpath, 'w')
 		self.sample_distribution()
 		self.bamfile.close()
+
+
+	def get_correct_ECDF(self):
+		read_len = int(self.read_length)
+		softclipps = 0 #read_len #int(self.read_length*0.6)
+
+
+		x_min = self.min_isize #max(2*(read_len-softclipps) , int(self.mean - 5*self.stddev) )
+		x_max = self.max_isize #int(self.mean + 5*self.stddev)
+		stepsize =  max(1,(x_max - x_min) / EMPIRICAL_BINS)
+		#print (x_max - x_min)/float(EMPIRICAL_BINS)
+		cdf_list = [ self.full_ECDF( x_min) * self.get_weight(int(round(x_min+stepsize/2.0,0)), read_len, softclipps)  ] #[ self.full_ECDF( 2*(read_len-softclipps)) * self.get_weight(2*(read_len-softclipps), gap_coordinates, read_len, softclipps) ]
+
+
+		# create weigted (true) distribution
+
+		for x in range( x_min + stepsize , x_max, stepsize):
+			increment_area = self.get_weight(int((x+stepsize/2)), read_len, softclipps) * (self.full_ECDF(x) - self.full_ECDF(x-stepsize))
+			cdf_list.append( cdf_list[-1] + increment_area)
+
+		tot_cdf = cdf_list[-1]
+
+		cdf_list_normalized = map(lambda x: x /float(tot_cdf),cdf_list)
+
+		# Now create a weighted sample
+
+		self.true_distr = [ bisect.bisect(cdf_list_normalized, random.uniform(0, 1)) * stepsize  + x_min for i in range(50000) ]
+
+		# initialization of no gap true distribution
+		self.adjustedECDF_no_gap = self.true_distr
+
+		n = len(self.true_distr)
+		self.adjusted_mean = sum(self.true_distr)/float(len(self.true_distr))
+		self.adjusted_stddev = (sum(list(map((lambda x: x ** 2 - 2 * x * self.adjusted_mean + self.adjusted_mean ** 2), self.true_distr))) / (n - 1)) ** 0.5
+
 
 	def sample_distribution(self):
 		isize_list = []
@@ -78,46 +120,13 @@ class LibrarySampler(object):
 		self.stddev = std_dev_isize 
 		self.full_ECDF = ECDF(isize_list)
 		self.adjustedECDF_no_gap = None
-		self.adjustedECDF_no_gap = self.get_correct_ECDF([])
+		self.adjustedECDF_no_gap = self.get_correct_ECDF()
 		print >> self.outfile,'#Corrected mean:{0}, corrected stddev:{1}'.format(self.adjusted_mean, self.adjusted_stddev)
 		print >> self.outfile,'{0}\t{1}'.format(self.adjusted_mean, self.adjusted_stddev)
 
-		def get_weight(self,x,r,s):
-			return x - (2*(r-s)-1)
+	def get_weight(self,x,r,s):
+		return x - (2*(r-s)-1)
 
-		def get_correct_ECDF(self):
-			read_len = int(self.read_length)
-			softclipps = 0 #read_len #int(self.read_length*0.6)
-
-
-			x_min = self.min_isize #max(2*(read_len-softclipps) , int(self.mean - 5*self.stddev) )
-			x_max = self.max_isize #int(self.mean + 5*self.stddev)
-			stepsize =  max(1,(x_max - x_min) / EMPIRICAL_BINS)
-			#print (x_max - x_min)/float(EMPIRICAL_BINS)
-			cdf_list = [ self.full_ECDF( x_min) * self.get_weight(int(round(x_min+stepsize/2.0,0)), read_len, softclipps)  ] #[ self.full_ECDF( 2*(read_len-softclipps)) * self.get_weight(2*(read_len-softclipps), gap_coordinates, read_len, softclipps) ]
-
-
-			# create weigted (true) distribution
-
-			for x in range( x_min + stepsize , x_max, stepsize):
-				increment_area = self.get_weight(int((x+stepsize/2)), read_len, softclipps) * (self.full_ECDF(x) - self.full_ECDF(x-stepsize))
-				cdf_list.append( cdf_list[-1] + increment_area)
-
-			tot_cdf = cdf_list[-1]
-
-			cdf_list_normalized = map(lambda x: x /float(tot_cdf),cdf_list)
-
-			# Now create a weighted sample
-
-			self.true_distr = [ bisect.bisect(cdf_list_normalized, random.uniform(0, 1)) * stepsize  + x_min for i in range(1000) ]
-
-			# initialization of no gap true distribution
-			self.adjustedECDF_no_gap = self.true_distr
-
-			n = len(self.true_distr)
-			self.adjusted_mean = sum(self.true_distr)/float(len(self.true_distr))
-			self.adjusted_stddev = (sum(list(map((lambda x: x ** 2 - 2 * x * self.adjusted_mean + self.adjusted_mean ** 2), self.true_distr))) / (n - 1)) ** 0.5
-
-		def plot(self):
-			pass
+	def plot(self):
+		pass
 
