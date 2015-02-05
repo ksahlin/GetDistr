@@ -19,19 +19,19 @@ def AdjustInsertsizeDist(mean_insert, std_dev_insert, insert_list):
 
 
 def is_proper_aligned_unique_innie(read):
-	return not read.is_unmapped and \
-				( (read.is_reverse and not read.mate_is_reverse  and read.tlen < 0 ) or \
-	            (not read.is_reverse and read.mate_is_reverse  and read.tlen > 0 ) ) \
-	            and not read.mate_is_unmapped and read.mapq > 10 and not read.is_secondary and read.rname == read.mrnm 
+    mapped_ok = not (read.is_unmapped or read.mate_is_unmapped)
+    orientation_ok = (read.is_reverse and not read.mate_is_reverse and read.tlen < 0) or \
+            (not read.is_reverse and read.mate_is_reverse and read.tlen > 0)
+    quality_ok = read.mapq > 10 and not read.is_secondary
+    same_ref = read.rname == read.mrnm
 
+    return mapped_ok and orientation_ok and quality_ok and same_ref
 
-# def is_proper_aligned_unique_innie(read):
-# 	return not read.is_unmapped and \
-# 				(read.is_reverse and not read.mate_is_reverse and read.is_read1 and read.tlen < 0 ) or \
-# 	            (not read.is_reverse and read.mate_is_reverse and read.is_read1 and read.tlen > 0 ) \
-# 				or (read.is_reverse and not read.mate_is_reverse and read.is_read2 and read.tlen < 0 ) or \
-# 				(not read.is_reverse and read.mate_is_reverse and read.is_read2 and read.tlen > 0 ) \
-# 	            and not read.mate_is_unmapped and read.mapq > 10 and not read.is_secondary and read.rname == read.mrnm 
+	# return not read.is_unmapped and not read.mate_is_unmapped and \
+	# 			( (read.is_reverse and not read.mate_is_reverse  and read.tlen < 0 ) or \
+	#             (not read.is_reverse and read.mate_is_reverse  and read.tlen > 0 ) ) \
+	#             and  and read.mapq > 10 and not read.is_secondary and read.rname == read.mrnm 
+
 
 class LibrarySampler(object):
 	"""docstring for LibrarySampler"""

@@ -100,6 +100,11 @@ if __name__ == '__main__':
 	get_bp_stats_parser.add_argument('outfolder', type=str, help='Outfolder. ')
 	get_bp_stats_parser.set_defaults(which='get_bp_stats')
 
+	# create the parser for the "get_gaps" command
+	get_bp_stats_parser = subparsers.add_parser('get_gaps', help='Contig assembly file for gap positions')
+	get_bp_stats_parser.add_argument('assembly_file', type=str, help='Fasta file with assembly/genome. ')
+	get_bp_stats_parser.add_argument('outfolder', type=str, help='Outfolder. ')
+	get_bp_stats_parser.set_defaults(which='get_gaps')
 
 	# create the parser for the "cluster" command
 	# cluster = subparsers.add_parser('cluster_pvals', help='Takes a pvalue file and clusters them into significan regions')
@@ -122,6 +127,8 @@ if __name__ == '__main__':
 		pass
 	elif args.which == 'get_bp_stats':
 		bp_stats(args)
+	elif args.which == 'get_gaps':
+		pass
 	else:
 		print 'invalid call'
 
