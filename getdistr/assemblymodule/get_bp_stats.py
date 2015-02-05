@@ -5,6 +5,8 @@ import lib_est
 import pysam
 import sys
 
+from mathstats.normaldist.normal import MaxObsDistr
+
 import heapq
 
 class Scanner(object):
@@ -133,6 +135,7 @@ def read_pair_generator(bam,libstats):
 						heapq.heappush(read_pair_heap, (min_pos, r, mate_pos))
 						break
 
+
 	# last reads
 	while True:
 		try:
@@ -147,7 +150,6 @@ def parse_bam(bam_file,libstats,out_path):
 
 	with pysam.Samfile(bam_file, 'rb') as bam:
 		reference_lengths = dict(zip(bam.references, map(lambda x: int(x), bam.lengths)))
-		bam_filtered = ifilter(lambda r: r.flag <= 200, bam)
 		current_scaf = -1
 		read_len = int(libstats.read_length)
 		counter = 0
@@ -155,8 +157,11 @@ def parse_bam(bam_file,libstats,out_path):
 		reads_fwd = 0
 		reads_rev = 0
 
+		already_sampled = set()
+		duplicates = set()
+
 		for i,(read,mpos) in enumerate(read_pair_generator(bam,libstats)):
-			#print read.pos #, read2.pos
+			#print read.pos, mpos #, read2.pos
 
 			if i %100000 == 0:
 				print i
@@ -184,7 +189,8 @@ def parse_bam(bam_file,libstats,out_path):
 				print 'reads_rev on scanned contig:',reads_rev
 				reads_fwd = 0
 				reads_rev = 0
-				#visited = set()
+				already_sampled = set()
+				duplicates = set()
 				scanner = Scanner(current_ref,outfile)
 				scanner.update_pos(current_coord)
 				scaf_length = reference_lengths[current_ref]
@@ -192,30 +198,31 @@ def parse_bam(bam_file,libstats,out_path):
 			else:
 				scanner.update_pos(current_coord)
 
-
-			# if read.qname in duplicates:
-			# 	continue
-
-			if read.is_reverse:
-				reads_rev +=1
-			else:
-				reads_fwd += 1
-
 			if read.is_reverse: #read.qname in visited and read.is_reverse:
 				assert read.tlen < 0
+				#print 'reads_fwd on scanned contig:',reads_fwd
+				#print 'reads_rev on scanned contig:',reads_rev
+				if (read.qname,mpos,read.pos) in duplicates:
+					continue
 				scanner.remove_obs(read.tlen)
-				continue
+				reads_rev +=1
+				
 
 			else: #if lib_est.is_proper_aligned_unique_innie(read) and (libstats.min_isize <= read.tlen <= libstats.max_isize):
 
 				if read.aend >= scaf_length or read.aend < 0 or read.mpos +read.rlen > scaf_length or read.pos < 0:
 					print 'Read coordinates outside scaffold length for {0}:'.format(current_scaf), read.aend, read.aend, read.mpos +read.rlen, read.pos 
 					#continue
-				if read.tlen <0 :
-					print 'BUG', read.tlen
-				#visited.add(read.qname)
-				#visited_container[read.qname] = read
+				# if read.tlen <0 :
+				# 	print 'BUG', read.tlen
+
+				if (read.pos,mpos) in already_sampled:
+					duplicates.add((read.qname,read.pos,mpos))
+					continue
+
+				already_sampled.add((read.pos,mpos))
 				scanner.add_obs(read.tlen)
+				reads_fwd += 1
 				counter += 1
 		print 'Good read pair count: ', counter
 
@@ -223,84 +230,5 @@ def parse_bam(bam_file,libstats,out_path):
 
 		print 'Proper reads:',counter
 
-		# for i,read in enumerate(bam_filtered):
-		# 	if (read.qname, not read.is_reverse) in visited and read.is_reverse:
-		# 		#visited.remove((read.qname, not read.is_reverse)) # we have visited both in pair
-		# 		del visited_container[read.qname]
-		# 		scanner.remove_obs(read.tlen)
-		# 		continue
-		# 	elif (read.qname, not read.is_reverse) in visited and not read.is_reverse:
-		# 		continue
-
-		# 	if read.is_unmapped:
-		# 		continue
-		# 	current_coord = read.pos + read_len
-		# 	current_ref = bam.getrname(read.tid)
-
-		# 	if current_ref == -1:
-		# 		continue
-
-		# 	coord1 = read.pos
-		# 	coord2 = read.mpos
-
-		# 	if (i + 1) %100000 == 0:
-		# 		# print i
-		# 		print 'visited:', len(visited)
-		# 		#print len(duplicates)
-		# 		print '#Processing read:{0}'.format(i)
-		# 		pass
-
-		# 	if (coord1, coord2) == prev_coord:
-		# 		duplicate_count += 1
-		# 		duplicates.add(read.qname)
-		# 		continue
-		# 	else:
-		# 		prev_coord = (coord1, coord2)
-
-				
-		# 	if reference_lengths[current_ref] < libstats.max_isize:
-		# 		continue
-
-		# 	# print out bp stats for base pairs that we have passed
-		# 	if current_ref != current_scaf:
-		# 		print current_ref
-		# 		print 'visited to new ref', len(visited)
-		# 		visited = {}#set()
-		# 		scanner = Scanner(current_ref,outfile)
-		# 		scanner.update_pos(current_coord)
-		# 		scaf_length = reference_lengths[current_ref]
-		# 		current_scaf = current_ref 
-		# 	else:
-		# 		scanner.update_pos(current_coord)
 
 
-		# 	if read.qname in duplicates:
-		# 		continue
-
-		# 	# the read pairs we want to use for calculating FCD
-		# 	# also, we follow reaprs suggestion and remove read pairs that are further away than
-		# 	# 1.5*libstats.mean from the position of interest. First we can safely remove anything
-		# 	# bigger than 3*libstats.mean (because at least one read of this read pair
-		# 	# is going to be further away than 1.5*mean from the position of interest in this read pair )
-			
-		# 	# secondary alignment
-		# 	# if read.qname in visited and not read.is_reverse:
-		# 	# 	continue
-
-		# 	elif lib_est.is_proper_aligned_unique_innie(read) and (libstats.min_isize <= read.tlen <= libstats.max_isize):
-
-		# 		if read.aend >= scaf_length or read.aend < 0 or read.mpos +read.rlen > scaf_length or read.pos < 0:
-		# 			#print 'Read coordinates outside scaffold length for {0}:'.format(current_scaf), read.aend, read.aend, read.mpos +read.rlen, read.pos 
-		# 			continue
-		# 		if read.tlen <0 :
-		# 			print 'BUG', read.tlen
-		# 		visited[(read.qname, read.is_reverse)] = read.tlen #.add((read.qname, read.is_reverse))
-		# 		visited_container[read.qname] = read
-		# 		scanner.add_obs(read.tlen)
-		# 		counter += 1
-		# 		if counter % 10000 == 0:
-		# 			print 'Good read pair count: ', counter
-		# print 'visited final', len(visited)
-		# print 'Good read pair count: ', counter
-		# # for name,read in visited_container.iteritems():
-		# # 	print read.flag, read.tlen, read.is_unmapped, read.is_read2, read.mate_is_unmapped, read.mapq

@@ -4,6 +4,7 @@ import argparse
 import calc_pvalues
 import lib_est
 import get_bp_stats
+import get_gap_coordinates
 
 import os
 
@@ -34,11 +35,18 @@ def collect_libstats(infile):
 	print param.mu, param.sigma, param.adjusted_mu, param.adjusted_sigma, param.min_isize, param.max_isize, param.read_length
 	return param
 
+def get_lib_est(args):
+	lib_out = os.path.join(args.outfolder,'library_info.txt')
+	lib_est.LibrarySampler(args.bampath,lib_out)
 
 def bp_stats(args):
 	lib_out = os.path.join(args.outfolder,'library_info.txt')
 	param = collect_libstats(lib_out)
 	get_bp_stats.parse_bam(args.bampath, param, os.path.join(args.outfolder,'bp_stats.txt'))
+
+def gap_coordinates(args):
+	gaps_out = os.path.join(args.outfolder,'gap_coordinates.txt')
+	get_gap_coordinates.get_gap_coordinates(args.assembly_file, gaps_out)
 
 def main_pipline(args):
 	"""
@@ -68,6 +76,7 @@ def main_pipline(args):
 	get_bp_stats.parse_bam(args.bampath, param, os.path.join(args.outfolder,'bp_stats.txt'))
 
 	#3
+	#get_gap_coordinates.
 	#cluster_pvals(args.outfolder, args.assembly_file, args.pval, args.window_size)
 
 
@@ -92,7 +101,8 @@ if __name__ == '__main__':
 	# create the parser for the "lib_est" command	
 	lib_est_parser = subparsers.add_parser('lib_est', help='Estimate library parameters')
 	lib_est_parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
-	lib_est_parser.set_defaults(which='lib_est_parser')
+	lib_est_parser.add_argument('outfolder', type=str, help='Outfolder. ')
+	lib_est_parser.set_defaults(which='lib_est')
 	
 	# create the parser for the "get_bp_stats" command
 	get_bp_stats_parser = subparsers.add_parser('get_bp_stats', help='Scan bam file and calculate pvalues for each base pair')
@@ -123,12 +133,12 @@ if __name__ == '__main__':
 
 	if args.which == 'pipeline':
 		main_pipline(args)
-	elif args.which == 'lib_est_parser':
-		pass
+	elif args.which == 'lib_est':
+		get_lib_est(args)
 	elif args.which == 'get_bp_stats':
 		bp_stats(args)
 	elif args.which == 'get_gaps':
-		pass
+		gap_coordinates(args)
 	else:
 		print 'invalid call'
 
