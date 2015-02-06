@@ -135,6 +135,13 @@ class LibrarySampler(object):
 		self.adjustedECDF_no_gap = self.get_correct_ECDF()
 		print >> self.outfile,'#Corrected mean:{0}, corrected stddev:{1}'.format(self.adjusted_mean, self.adjusted_stddev)
 		print >> self.outfile,'{0}\t{1}'.format(self.adjusted_mean, self.adjusted_stddev)
+		reference_lengths = map(lambda x: int(x), self.bamfile.lengths)
+		ref_list = zip(self.bamfile.references, reference_lengths)
+		total_base_pairs = sum(reference_lengths)
+		print >> self.outfile,'{0}'.format(total_base_pairs)
+		for ref, length in ref_list:
+			print >> self.outfile,'{0},{1}'.format(ref, length)
+
 
 	def get_weight(self,x,r,s):
 		return x - (2*(r-s)-1)
@@ -151,7 +158,6 @@ def read_pair_generator(bam,max_isize):
 	bam_filtered = ifilter(lambda r: r.flag <= 255, bam)
 	for read in bam_filtered:
 		if read.tid != prev_read_ref  and prev_read_ref != None:
-			print read.tid, prev_read_ref
 			while True:
 				try:
 					min_pos,r1,mate_pos = heapq.heappop(read_pair_heap)

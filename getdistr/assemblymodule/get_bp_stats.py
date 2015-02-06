@@ -62,8 +62,7 @@ def read_pair_generator(bam,libstats):
 	prev_read_ref = None
 	bam_filtered = ifilter(lambda r: r.flag <= 255, bam)
 	for read in bam_filtered:
-		if read.tid != prev_read_ref  and prev_read_ref != None:
-			print read.tid, prev_read_ref
+		if read.tid != prev_read_ref and not read.is_unmapped  and prev_read_ref != None:
 			while True:
 				try:
 					min_pos,r1,mate_pos = heapq.heappop(read_pair_heap)
@@ -76,14 +75,10 @@ def read_pair_generator(bam,libstats):
 		if lib_est.is_proper_aligned_unique_innie(read) and 0 <= read.tlen <= libstats.max_isize and not read.is_reverse:
 			if (read.qname, read.is_reverse) in read_pairs:
 				print 'bug, multiple alignments', read.qname
-				# if '361218' == read.qname:
-				# 	print 'lollong here'
 				del read_pairs[(read.qname, read.is_reverse)]
 				continue
 			else:
 				read_pairs[(read.qname, read.is_reverse)] = read
-				# if '361218' == read.qname:
-				# 	print 'pushing here'
 
 		elif lib_est.is_proper_aligned_unique_innie(read) and  -libstats.max_isize <= read.tlen < 0 and read.is_reverse:
 			if (read.qname, read.is_reverse) in read_pairs :
