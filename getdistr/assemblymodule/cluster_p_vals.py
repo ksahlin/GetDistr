@@ -1,6 +1,16 @@
 
 from collections import deque
+import math
+from scipy.stats import t,norm
+import os
+import pickle
 
+try:
+	import matplotlib
+	matplotlib.use('pdf')
+	import matplotlib.pyplot as plt
+except:
+	pass
 
 def median(l):
     half = len(l) / 2
@@ -77,7 +87,7 @@ class BreakPointContainer(object):
 		output_string= 'seqname\tsource\tfeature\tstart\tend\tscore(p_val)\tstrand\tframe\tattribute\n'
 		
 		for seqname, source, feature, start, end, avg_p_val, strand, frame, attribute in self.final_bps:
-			if start > self.param.mean and end < self.param.scaf_lengths[seqname] - self.param.mean:
+			if start > self.param.mu and end < self.param.scaf_lengths[seqname] - self.param.mu:
 				output_string += '{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n'.format(seqname, source, feature, int(start), int(end), avg_p_val, strand, frame, attribute) 
 		return output_string
 
@@ -164,41 +174,113 @@ class Window(object):
 		else:
 			return False
 
+def erfcc(x):
+    """Complementary error function."""
+    z = abs(x)
+    k = 1. / (1. + 0.5 * z)
+    r = k * math.exp(-z * z - 1.26551223 + k * (1.00002368 + k * (.37409196 +
+        k * (.09678418 + k * (-.18628806 + k * (.27886807 +
+        k * (-1.13520398 + k * (1.48851587 + k * (-.82215223 +
+        k * .17087277)))))))))
+    if (x >= 0.):
+        return r
+    else:
+        return 2. - r
+
+def normcdf(x, mu, sigma):
+    k = x - mu;
+    y = 0.5 * erfcc(-k / (sigma * math.sqrt(2.0)));
+    if y > 1.0:
+        y = 1.0;
+    return y
+
+
+def calc_pvalue(param, n_obs, mean, stddev):
+	one_sample_t = ( mean - param.adjusted_mu)/ (stddev/math.sqrt(n_obs))
+	if n_obs > 20:
+		return normcdf(one_sample_t,0. , 1.) # norm.cdf(one_sample_t)
+	else:
+		return t.cdf(one_sample_t, n_obs - 1)
+	#return area #min(area, 1.0-area) 
+
 
 
 
 def read_in_gaps(gap_file_path):
-	pass
+	gap_coordinates = {}
+	for line in open(gap_file_path, 'r'):
+		[scf, start, stop] = line.strip().split()
+		gap_coordinates[scf] = (int(start), int(stop))
+	return gap_coordinates
 
-def main(bp_file_path, gap_file_path,outfile_path, param):
-	gff_file =  open(outfile_path,'w')
+def plot_stats(param,pvalues,mean_isizes):
+	pval_plot = os.path.join(param.outfolder,'pvalues.pdf')
+	plt.hist(pvalues, bins=200)
+	plt.ylabel('Frequency ')
+	plt.xlabel('p-value')
+	title = "p-value distribution"
+	plt.title(title)
+	plt.legend( )
+	plt.savefig(pval_plot)
+	plt.close()
 
+	isize_plot = os.path.join(param.outfolder,'isizes.pdf')
+	x = range(len(mean_isizes))
+	plt.plot(x, mean_isizes, '-')
+	plt.ylabel('mean isize')
+	plt.xlabel('genome coordinate every thousand bp')
+	title = "Mean spanning isize"
+	plt.title(title)
+	plt.legend( )
+	plt.savefig(isize_plot)
+	plt.close()
+
+
+
+def main(bp_file_path, gap_file_path, param):
+	if param.plots == True:
+		p_values = []
+		mean_isize = []
+
+	significant_regions = os.path.join(param.outfolder,'regions.gff')
+	ecdf = pickle.load(open(os.path.join(param.outfolder,'ecdf.pkl'),'r'))
+	print ecdf.p_value_table
+	gff_file =  open(significant_regions,'w')
 	gap_coordinates =  read_in_gaps(gap_file_path)
-	
 	current_seq = -1
 	sv_container = BreakPointContainer(param)
 
-	for line in open(bp_file_path,'r').readlines():
+
+	for i, line in enumerate(open(bp_file_path,'r')):
 		scf, pos, n_obs, mean, stddev = line.strip().split()
+		pos, n_obs,mean,stddev = int(pos), float(n_obs), float(mean), float(stddev)
 		if float(n_obs) < 2 or float(mean) < 0:
 			current_seq = -1
 			continue
 
+		quantile =  calc_pvalue(param, n_obs, mean, stddev)
+		if param.plots == True:
+			p_values.append(quantile)
+			if i %1000 == 0:
+				mean_isize.append(mean)
+
 		if (scf != current_seq and pos >= param.max_window_size):
 			current_seq = scf
 			window = Window(param.pval, param.max_window_size, param.read_length)
-			window.update(int(pos),float(pos_p_val), float(mean))
+			window.update(pos, min(quantile, 1-quantile), mean)
 		
-		else:
-			for significant_position in  window.update(int(pos),float(pos_p_val), float(mean)):
+		elif pos >= param.max_window_size:
+			for significant_position in  window.update(pos, min(quantile, 1-quantile), mean):
 				avg_window_mean = window.avg_inner_mean + 2*window.read_length
-				if avg_window_mean > param.adjusted_mean:
-					sv_container.add_bp_to_cluster(current_seq, int(significant_position), window.avg_pval, int(n_obs), avg_window_mean, 'expansion', min(window.nr_in_window, window.max_window_size))
+				if avg_window_mean > param.adjusted_mu:
+					sv_container.add_bp_to_cluster(current_seq, int(significant_position), window.avg_pval, n_obs, avg_window_mean, 'expansion', min(window.nr_in_window, window.max_window_size))
 				else:
-					sv_container.add_bp_to_cluster(current_seq, int(significant_position), window.avg_pval, int(n_obs), avg_window_mean, 'contraction', min(window.nr_in_window, window.max_window_size))
+					sv_container.add_bp_to_cluster(current_seq, int(significant_position), window.avg_pval, n_obs, avg_window_mean, 'contraction', min(window.nr_in_window, window.max_window_size))
+		if i%10000 == 0:
+			print 'Processing coord',i, quantile, mean, stddev, n_obs, param.adjusted_mu
 
+	if param.plots == True:
+		plot_stats(param, p_values,mean_isize)
 
-
-	sv_container =  get_misassemly_regions(pval_file_in, param, info_file) #open(args.pval_file,'r')
 	sv_container.get_final_bp_info()
 	print >> gff_file, str(sv_container)

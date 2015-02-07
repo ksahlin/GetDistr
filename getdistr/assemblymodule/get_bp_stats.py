@@ -4,10 +4,39 @@ import math
 import lib_est
 import pysam
 import sys
+import os
+import pickle
 
 from mathstats.normaldist.normal import MaxObsDistr
+from statsmodels.distributions.empirical_distribution import ECDF
 
 import heapq
+
+class ECDF_hist(object):
+	"""docstring for ECDF_hist"""
+	def __init__(self):
+		super(ECDF_hist, self).__init__()
+		self.means = []
+
+
+	def make_ECDF(self):
+		self.means_ECDF = ECDF(self.means)
+
+	def get_quantiles(self):
+		self.n = float(len(self.means))
+		self.mean = sum(self.means)/self.n
+		self.stddev = (sum(list(map((lambda x: x ** 2 - 2 * x * self.mean + self.mean ** 2), self.means))) / (self.n - 1)) ** 0.5
+		self.p_value_table = {}
+		self.means.sort()
+		lowest_mean = int(self.means[0])
+		highest_mean = int(self.means[-1])
+
+		for mean in xrange(lowest_mean,highest_mean+1):
+			cdf_val = self.means_ECDF(mean)
+			self.p_value_table[mean] = cdf_val
+		self.means = []
+		self.means_ECDF = ECDF([0,0])
+
 
 class Scanner(object):
 	"""docstring for Scanner"""
@@ -21,10 +50,11 @@ class Scanner(object):
 		self.o_sq = 0
 		self.n_obs = 0.0
 		self.outfile = outfile
+		self.ecdf = ECDF_hist()
 
 	def write_bp_stats_to_file(self,bp_index):
 		#print  '{0}\t{1}\t{2}\t{3}\t{4}'.format(self.ref_name, bp_index, self.n_obs, self.mu, self.var)
-		print >> self.outfile, '{0}\t{1}\t{2}\t{3}\t{4}'.format(self.ref_name, bp_index, self.n_obs, self.mu, math.sqrt(self.var))
+		print >> self.outfile, '{0}\t{1}\t{2}\t{3}\t{4}'.format(self.ref_name, bp_index, int(self.n_obs), self.mu, math.sqrt(self.var))
 
 	def add_obs(self, isize):
 		self.o += isize
@@ -53,9 +83,10 @@ class Scanner(object):
 		if self.position < pos:
 			for bp_index in range(self.position,pos):
 				self.write_bp_stats_to_file(bp_index)
+				self.ecdf.means.append(self.mu)
 		self.position = pos
 
-def read_pair_generator(bam,libstats):
+def read_pair_generator(bam,param):
 	read_pairs = {}
 	read_pair_heap = []
 	#visited = set()
@@ -72,7 +103,7 @@ def read_pair_generator(bam,libstats):
 		prev_read_ref = read.tid
 
 
-		if lib_est.is_proper_aligned_unique_innie(read) and 0 <= read.tlen <= libstats.max_isize and not read.is_reverse:
+		if lib_est.is_proper_aligned_unique_innie(read) and 0 <= read.tlen <= param.max_isize and not read.is_reverse:
 			if (read.qname, read.is_reverse) in read_pairs:
 				print 'bug, multiple alignments', read.qname
 				del read_pairs[(read.qname, read.is_reverse)]
@@ -80,7 +111,7 @@ def read_pair_generator(bam,libstats):
 			else:
 				read_pairs[(read.qname, read.is_reverse)] = read
 
-		elif lib_est.is_proper_aligned_unique_innie(read) and  -libstats.max_isize <= read.tlen < 0 and read.is_reverse:
+		elif lib_est.is_proper_aligned_unique_innie(read) and  -param.max_isize <= read.tlen < 0 and read.is_reverse:
 			if (read.qname, read.is_reverse) in read_pairs :
 				print 'bug, multiple reverse alignments',read.qname
 				del read_pairs[(read.qname, read.is_reverse)]
@@ -112,7 +143,7 @@ def read_pair_generator(bam,libstats):
 					except IndexError:
 						print 'NOOO'
 						break
-					if read.pos - libstats.max_isize >= min_pos:
+					if read.pos - param.max_isize >= min_pos:
 						#print 'p',read1.pos, min_pos
 						
 						#print 'here!', r1.pos,r1.flag,r1.mpos
@@ -140,13 +171,13 @@ def read_pair_generator(bam,libstats):
 			break
 
 
-def parse_bam(bam_file,libstats,out_path):
-	outfile = open(out_path,'w')
+def parse_bam(bam_file,param):
+	outfile = open(os.path.join(param.outfolder,'bp_stats.txt'),'w')
 
 	with pysam.Samfile(bam_file, 'rb') as bam:
 		reference_lengths = dict(zip(bam.references, map(lambda x: int(x), bam.lengths)))
 		current_scaf = -1
-		read_len = int(libstats.read_length)
+		read_len = int(param.read_length)
 		counter = 0
 
 		reads_fwd = 0
@@ -154,14 +185,15 @@ def parse_bam(bam_file,libstats,out_path):
 
 		already_sampled = set()
 		duplicates = set()
+		scanner = Scanner('init',outfile)
 
-		for i,(read,mpos) in enumerate(read_pair_generator(bam,libstats)):
+		for i,(read,mpos) in enumerate(read_pair_generator(bam,param)):
 			#print read.pos, mpos #, read2.pos
 
 			if i %100000 == 0:
 				print i
 
-			if abs(read.tlen) <= 2*libstats.read_length:
+			if abs(read.tlen) <= 2*param.read_length:
 				continue
 
 			counter += 1
@@ -173,7 +205,7 @@ def parse_bam(bam_file,libstats,out_path):
 				continue
 
 				
-			if reference_lengths[current_ref] < libstats.max_isize:
+			if reference_lengths[current_ref] < param.max_isize:
 				continue
 
 			# print out bp stats for base pairs that we have passed
@@ -186,7 +218,12 @@ def parse_bam(bam_file,libstats,out_path):
 				reads_rev = 0
 				already_sampled = set()
 				duplicates = set()
+
+				# pass the emperical distribution on to the next object
+				ecdf_ = scanner.ecdf
 				scanner = Scanner(current_ref,outfile)
+				scanner.ecdf = ecdf_
+
 				scanner.update_pos(current_coord)
 				scaf_length = reference_lengths[current_ref]
 				current_scaf = current_ref 
@@ -203,7 +240,7 @@ def parse_bam(bam_file,libstats,out_path):
 				reads_rev +=1
 				
 
-			else: #if lib_est.is_proper_aligned_unique_innie(read) and (libstats.min_isize <= read.tlen <= libstats.max_isize):
+			else: #if lib_est.is_proper_aligned_unique_innie(read) and (param.min_isize <= read.tlen <= param.max_isize):
 
 				if read.aend >= scaf_length or read.aend < 0 or read.mpos +read.rlen > scaf_length or read.pos < 0:
 					print 'Read coordinates outside scaffold length for {0}:'.format(current_scaf), read.aend, read.aend, read.mpos +read.rlen, read.pos 
@@ -220,10 +257,9 @@ def parse_bam(bam_file,libstats,out_path):
 				reads_fwd += 1
 				counter += 1
 		print 'Good read pair count: ', counter
-
-
-
 		print 'Proper reads:',counter
-
+		scanner.ecdf.make_ECDF()
+		scanner.ecdf.get_quantiles()
+		pickle.dump(scanner.ecdf, open(os.path.join(param.outfolder,'ecdf.pkl'),'w') )
 
 

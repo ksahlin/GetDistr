@@ -140,7 +140,7 @@ class LibrarySampler(object):
 		total_base_pairs = sum(reference_lengths)
 		print >> self.outfile,'{0}'.format(total_base_pairs)
 		for ref, length in ref_list:
-			print >> self.outfile,'{0},{1}'.format(ref, length)
+			print >> self.outfile,'{0}|{1}'.format(ref, length)
 
 
 	def get_weight(self,x,r,s):
