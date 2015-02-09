@@ -36,7 +36,7 @@ def is_proper_aligned_unique_innie(read):
 
 class LibrarySampler(object):
 	"""docstring for LibrarySampler"""
-	def __init__(self, bampath,outpath):
+	def __init__(self, bampath,outpath,param):
 		super(LibrarySampler, self).__init__()
 		self.bamfile = pysam.Samfile(bampath, 'rb')
 		self.bampath = bampath
@@ -83,27 +83,29 @@ class LibrarySampler(object):
 		
 		## pilot sample
 		read_lengths = []
-		max_tlen = 0
+		# max_tlen = 0
 		bam_filtered = ifilter(lambda r: is_proper_aligned_unique_innie(r), self.bamfile)
+		isize_list = []
 		for sample_nr,read in enumerate(bam_filtered):
 	  		## add do insert size distribution calculation if proper pair
-			if is_proper_aligned_unique_innie(read):
+			if is_proper_aligned_unique_innie(read) and read.is_read1:
 				read_lengths.append(read.rlen)	
-				if abs(read.tlen) > max_tlen:
-					max_tlen = abs(read.tlen)
+				isize_list.append(read.tlen)
+				# if abs(read.tlen) > max_tlen:
+				# 	max_tlen = abs(read.tlen)
 			if sample_nr > SAMPLE_SIZE:
 				break
 		self.bamfile.reset()
-		max_tlen = max_tlen+1000
+		#max_tlen = max_tlen+1000
 		self.read_length = sum(read_lengths)/float(len(read_lengths))
 
 		## sample proper reads
 		
-		isize_list = []
-		for sample_nr,read in enumerate(proper_read_isize_iter(self.bampath, self.read_length, max_tlen)):
-	   		isize_list.append(read)
-			if sample_nr > SAMPLE_SIZE:
-				break
+		# isize_list = []
+		# for sample_nr,read in enumerate(proper_read_isize_iter(self.bampath, self.read_length, max_tlen)):
+	 #   		isize_list.append(read)
+		# 	if sample_nr > SAMPLE_SIZE:
+		# 		break
 		print >> self.outfile, '#Insert size sample size:', sample_nr
 		
 		isize_list = filter(lambda x: 0 < x - 2*self.read_length,isize_list)
@@ -150,136 +152,136 @@ class LibrarySampler(object):
 		pass
 
 
-def read_pair_generator(bam,max_isize):
-	read_pairs = {}
-	read_pair_heap = []
-	#visited = set()
-	prev_read_ref = None
-	bam_filtered = ifilter(lambda r: r.flag <= 255, bam)
-	for read in bam_filtered:
-		if read.tid != prev_read_ref  and prev_read_ref != None:
-			while True:
-				try:
-					min_pos,r1,mate_pos = heapq.heappop(read_pair_heap)
-					yield r1, mate_pos
-				except IndexError:
-					break
-		prev_read_ref = read.tid
+# def read_pair_generator(bam,max_isize):
+# 	read_pairs = {}
+# 	read_pair_heap = []
+# 	#visited = set()
+# 	prev_read_ref = None
+# 	bam_filtered = ifilter(lambda r: r.flag <= 255, bam)
+# 	for read in bam_filtered:
+# 		if read.tid != prev_read_ref  and prev_read_ref != None:
+# 			while True:
+# 				try:
+# 					min_pos,r1,mate_pos = heapq.heappop(read_pair_heap)
+# 					yield r1, mate_pos
+# 				except IndexError:
+# 					break
+# 		prev_read_ref = read.tid
 
 
-		if is_proper_aligned_unique_innie(read) and 0 <= read.tlen <= max_isize and not read.is_reverse:
-			if (read.qname, read.is_reverse) in read_pairs:
-				print 'bug, multiple alignments', read.qname
-				# if '361218' == read.qname:
-				# 	print 'lollong here'
-				del read_pairs[(read.qname, read.is_reverse)]
-				continue
-			else:
-				read_pairs[(read.qname, read.is_reverse)] = read
-				# if '361218' == read.qname:
-				# 	print 'pushing here'
+# 		if is_proper_aligned_unique_innie(read) and 0 <= read.tlen <= max_isize and not read.is_reverse:
+# 			if (read.qname, read.is_reverse) in read_pairs:
+# 				print 'bug, multiple alignments', read.qname
+# 				# if '361218' == read.qname:
+# 				# 	print 'lollong here'
+# 				del read_pairs[(read.qname, read.is_reverse)]
+# 				continue
+# 			else:
+# 				read_pairs[(read.qname, read.is_reverse)] = read
+# 				# if '361218' == read.qname:
+# 				# 	print 'pushing here'
 
-		elif is_proper_aligned_unique_innie(read) and  - max_isize <= read.tlen < 0 and read.is_reverse:
-			if (read.qname, read.is_reverse) in read_pairs :
-				print 'bug, multiple reverse alignments',read.qname
-				del read_pairs[(read.qname, read.is_reverse)]
-				continue
+# 		elif is_proper_aligned_unique_innie(read) and  - max_isize <= read.tlen < 0 and read.is_reverse:
+# 			if (read.qname, read.is_reverse) in read_pairs :
+# 				print 'bug, multiple reverse alignments',read.qname
+# 				del read_pairs[(read.qname, read.is_reverse)]
+# 				continue
 
-			elif (read.qname, not read.is_reverse) in read_pairs:
-				read_pairs[(read.qname, read.is_reverse)] = read
-				#print 'gg',read.qname
-				#if '361218' in read_pairs:
-				#	print 'lollzzz'
-				#visited.add(read.qname)
-				read1 = read_pairs[(read.qname, not read.is_reverse)]	
-				if read.tid != read1.tid:
-					del read_pairs[(read.qname, not read.is_reverse)]
-					del read_pairs[(read.qname, read.is_reverse)]
-					continue
-				assert read.mpos == read1.pos
-				assert read.pos == read1.mpos
-				# print 'Read has another forward alignment'
-				# print read.pos, read.is_secondary, read.is_reverse
-				# print read1.pos, read1.is_secondary, read1.is_reverse
-				heapq.heappush(read_pair_heap, (read1.pos, read1, read.pos))
-				heapq.heappush(read_pair_heap, (read.pos, read, read1.pos))
-				while True:
-					try:
-						min_pos,r,mate_pos = heapq.heappop(read_pair_heap)
-						#print 'index', r1.qname,r2.qname
-						# print r1.pos, r2.pos
-					except IndexError:
-						print 'NOOO'
-						break
-					if read.pos - max_isize >= min_pos:
-						#print 'p',read1.pos, min_pos
+# 			elif (read.qname, not read.is_reverse) in read_pairs:
+# 				read_pairs[(read.qname, read.is_reverse)] = read
+# 				#print 'gg',read.qname
+# 				#if '361218' in read_pairs:
+# 				#	print 'lollzzz'
+# 				#visited.add(read.qname)
+# 				read1 = read_pairs[(read.qname, not read.is_reverse)]	
+# 				if read.tid != read1.tid:
+# 					del read_pairs[(read.qname, not read.is_reverse)]
+# 					del read_pairs[(read.qname, read.is_reverse)]
+# 					continue
+# 				assert read.mpos == read1.pos
+# 				assert read.pos == read1.mpos
+# 				# print 'Read has another forward alignment'
+# 				# print read.pos, read.is_secondary, read.is_reverse
+# 				# print read1.pos, read1.is_secondary, read1.is_reverse
+# 				heapq.heappush(read_pair_heap, (read1.pos, read1, read.pos))
+# 				heapq.heappush(read_pair_heap, (read.pos, read, read1.pos))
+# 				while True:
+# 					try:
+# 						min_pos,r,mate_pos = heapq.heappop(read_pair_heap)
+# 						#print 'index', r1.qname,r2.qname
+# 						# print r1.pos, r2.pos
+# 					except IndexError:
+# 						print 'NOOO'
+# 						break
+# 					if read.pos - max_isize >= min_pos:
+# 						#print 'p',read1.pos, min_pos
 						
-						#print 'here!', r1.pos,r1.flag,r1.mpos
-						try:
-							del read_pairs[(r.qname, r.is_reverse)]
-							yield r, mate_pos
-						except KeyError:
-							pass
-							print 'gah',read.is_reverse
-							# print r1.qname, r2.qname
-							# print r1.pos, r2.pos
+# 						#print 'here!', r1.pos,r1.flag,r1.mpos
+# 						try:
+# 							del read_pairs[(r.qname, r.is_reverse)]
+# 							yield r, mate_pos
+# 						except KeyError:
+# 							pass
+# 							print 'gah',read.is_reverse
+# 							# print r1.qname, r2.qname
+# 							# print r1.pos, r2.pos
 							
 
-					else:
-						heapq.heappush(read_pair_heap, (min_pos, r, mate_pos))
-						break
+# 					else:
+# 						heapq.heappush(read_pair_heap, (min_pos, r, mate_pos))
+# 						break
 
 
-	# last reads
-	while True:
-		try:
-			min_pos,r1,mate_pos = heapq.heappop(read_pair_heap)
-			yield r1, mate_pos
-		except IndexError:
-			break
+# 	# last reads
+# 	while True:
+# 		try:
+# 			min_pos,r1,mate_pos = heapq.heappop(read_pair_heap)
+# 			yield r1, mate_pos
+# 		except IndexError:
+# 			break
 
 
-def proper_read_isize_iter(bam_file_path, read_length, max_isize):
-	with pysam.Samfile(bam_file_path, 'rb') as bam:
-		reference_lengths = dict(zip(bam.references, map(lambda x: int(x), bam.lengths)))
-		current_scaf = -1
+# def proper_read_isize_iter(bam_file_path, read_length, max_isize):
+# 	with pysam.Samfile(bam_file_path, 'rb') as bam:
+# 		reference_lengths = dict(zip(bam.references, map(lambda x: int(x), bam.lengths)))
+# 		current_scaf = -1
 
-		reads_fwd = 0
-		reads_rev = 0
+# 		reads_fwd = 0
+# 		reads_rev = 0
 
-		already_sampled = set()
-		duplicates = set()
+# 		already_sampled = set()
+# 		duplicates = set()
 
-		for i,(read,mpos) in enumerate(read_pair_generator(bam,max_isize)):
-			if abs(read.tlen) <= 2*read_length:
-				continue
+# 		for i,(read,mpos) in enumerate(read_pair_generator(bam,max_isize)):
+# 			if abs(read.tlen) <= 2*read_length:
+# 				continue
 
-			current_ref = bam.getrname(read.tid)
+# 			current_ref = bam.getrname(read.tid)
 
-			if current_ref == -1:
-				continue
+# 			if current_ref == -1:
+# 				continue
 
 
-			# print out bp stats for base pairs that we have passed
-			if current_ref != current_scaf:
-				reads_fwd = 0
-				reads_rev = 0
-				already_sampled = set()
-				duplicates = set()
-				current_scaf = current_ref 
+# 			# print out bp stats for base pairs that we have passed
+# 			if current_ref != current_scaf:
+# 				reads_fwd = 0
+# 				reads_rev = 0
+# 				already_sampled = set()
+# 				duplicates = set()
+# 				current_scaf = current_ref 
 
-			if read.is_reverse: #read.qname in visited and read.is_reverse:
-				assert read.tlen < 0
-				if (read.qname,mpos,read.pos) in duplicates:
-					continue
-				reads_rev +=1
+# 			if read.is_reverse: #read.qname in visited and read.is_reverse:
+# 				assert read.tlen < 0
+# 				if (read.qname,mpos,read.pos) in duplicates:
+# 					continue
+# 				reads_rev +=1
 				
-			else: 
+# 			else: 
 
-				if (read.pos,mpos) in already_sampled:
-					duplicates.add((read.qname,read.pos,mpos))
-					continue
+# 				if (read.pos,mpos) in already_sampled:
+# 					duplicates.add((read.qname,read.pos,mpos))
+# 					continue
 
-				already_sampled.add((read.pos,mpos))
-				yield read.tlen
-				reads_fwd += 1
+# 				already_sampled.add((read.pos,mpos))
+# 				yield read.tlen
+# 				reads_fwd += 1

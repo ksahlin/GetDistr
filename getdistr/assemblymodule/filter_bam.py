@@ -5,6 +5,21 @@ import heapq
 import os,sys
 import argparse
 
+try:
+	import matplotlib
+	matplotlib.use('agg')
+	import matplotlib.pyplot as plt
+except ImportError:
+	pass
+
+
+def plot_isize(isizes,outfile):
+    plt.hist(isizes,bins=100)
+    plt.ylabel('frequency') 
+    plt.xlabel('fragment size')  
+    plt.title('Insert size distribution')
+    plt.legend( )
+    plt.savefig(outfile)
 
 def is_proper_aligned_unique_innie(read):
     mapped_ok = not (read.is_unmapped or read.mate_is_unmapped)
@@ -182,34 +197,74 @@ class CorrelatedSample(object):
 		return False
 
 
-def within_reference(bampath, outpath,n, min_isize, max_isize):
+def within_reference(bampath, outpath,n, min_isize, max_isize, param):
+	"""
+		Assumes that reads are aligned in PE orientation
+
+	"""
 	correlated_check = CorrelatedSample(n)
 	bamfile = pysam.Samfile(bampath, 'rb')
 	outfile = pysam.Samfile(outpath, 'wb', template=bamfile)
 
 	i = 0
+	reads_rev = 0
+	reads_fwd = 0
+	read_read1 = 0
+	read_read2 = 0
+	printed_fwd = set()
+	if param.plots:
+		isizes = []
 	for read, mate_pos in proper_read_isize(bamfile, min_isize, max_isize):
 		read_pos = read.pos
+
 		# remove unactive samples (read1 is more than n bp away)
 		correlated_check.remove_inactive(read_pos)
 
-		if correlated_check.is_correlated(mate_pos):
-			#print 'correlated'
-			continue
+		if not read.is_reverse:
+			if correlated_check.is_correlated(mate_pos):
+				#print 'correlated'
+				continue
+				# read is forward
+			else:
+				# add to sample neighborhood
+				correlated_check.add_sample(read_pos, mate_pos)
+				# print to filtered bamfile
+				outfile.write(read)
+				printed_fwd.add(read.qname)
+				if param.plots:
+					isizes.append(read.tlen) 
+				reads_fwd += 1
+				if read.is_read1:
+					read_read1 += 1
+				elif not read.is_read1:
+					read_read2 += 1
+
+		# read is reverse, both reads parsed
 		else:
-			# print to filtered bamfile
+			if read.qname in printed_fwd:
+				outfile.write(read)
+				printed_fwd.remove(read.qname)
+				reads_rev += 1
 
-			# add to sample neighborhood
-			correlated_check.add_sample(read_pos, mate_pos)
-
-			outfile.write(read)
+				if read.is_read1:
+					read_read1 += 1
+				elif not read.is_read1:
+					read_read2 += 1
 			#print 'not!'
 		i += 1
 		if i % 10000 == 1:
 			print 'processing coordinate', read.pos, 'on ref:', read.tid
-			
+			print reads_fwd,reads_rev,read_read1,read_read2
+	print reads_fwd,reads_rev,read_read1,read_read2
+	pysam.index(outpath)
 	outfile.close()
-def between_reference(bampath, outpath,n, min_isize, max_isize):
+
+
+	if param.plots:
+		outfile = os.path.join(param.plotfolder, 'isize.png')
+		plot_isize(isizes, outfile)	
+
+def between_reference(bampath, outpath,n, min_isize, max_isize, param):
 	pass
 
 if __name__ == '__main__':
@@ -219,21 +274,22 @@ if __name__ == '__main__':
 	subparsers = parser.add_subparsers(help='help for subcommand')
 
 	# create the parser for the "filter" command	
-	filter_parser = subparsers.add_parser('filter_within', help='Filters bam file for paired reads within references for better uniform coverage.')
-	filter_parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
-	filter_parser.add_argument('outfolder', type=str, help='Outfolder. ')
-	filter_parser.add_argument('--n', dest='n', type=int, default=20, help='Neighborhood size. ')	
-	filter_parser.add_argument('--lib_min', dest='lib_min', type=int, default=200, help='Minimum insert size (if in doubt, just set lib_min = 2*read_length). ')	
-	filter_parser.add_argument('--lib_max', dest='lib_max', type=int, default=200000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
-	filter_parser.set_defaults(which='filter_within')
+	filter_parser_within = subparsers.add_parser('filter_within', help='Filters bam file for paired reads within references for better uniform coverage.')
+	filter_parser_within.add_argument('bampath', type=str, help='bam file with mapped reads. ')
+	filter_parser_within.add_argument('outfolder', type=str, help='Outfolder. ')
+	filter_parser_within.add_argument('--n', dest='n', type=int, default=20, help='Neighborhood size. ')	
+	filter_parser_within.add_argument('--lib_min', dest='lib_min', type=int, default=200, help='Minimum insert size (if in doubt, just set lib_min = 2*read_length). ')	
+	filter_parser_within.add_argument('--lib_max', dest='lib_max', type=int, default=200000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
+	filter_parser_within.add_argument('--plots', dest="plots", action='store_true', help='Plot pval distribution.')
+	filter_parser_within.set_defaults(which='filter_within')
 
 	# create the parser for the "filter" command	
-	filter_parser = subparsers.add_parser('filter_between', help='Filters bam file for paired reads on different references for better uniform coverage.')
-	filter_parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
-	filter_parser.add_argument('outfolder', type=str, help='Outfolder. ')
-	filter_parser.add_argument('--n', dest='n', type=int, default=20, help='Neighborhood size. ')	
-	filter_parser.add_argument('--lib_max', dest='lib_max', type=int, default=200000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
-	filter_parser.set_defaults(which='filter_between')
+	filter_parser_between = subparsers.add_parser('filter_between', help='Filters bam file for paired reads on different references for better uniform coverage.')
+	filter_parser_between.add_argument('bampath', type=str, help='bam file with mapped reads. ')
+	filter_parser_between.add_argument('outfolder', type=str, help='Outfolder. ')
+	filter_parser_between.add_argument('--n', dest='n', type=int, default=20, help='Neighborhood size. ')	
+	filter_parser_between.add_argument('--lib_max', dest='lib_max', type=int, default=20000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
+	filter_parser_between.set_defaults(which='filter_between')
 	
 	args = parser.parse_args()
 
@@ -251,11 +307,21 @@ if __name__ == '__main__':
 	if not os.path.exists(args.outfolder):
 		os.makedirs(args.outfolder)
 
+	if args.plots:
+		args.plotfolder = os.path.join(args.outfolder,'plots')
+
+		if not os.path.exists(args.plotfolder):
+			os.makedirs(args.plotfolder)
+
 	if args.which == 'filter_between':
 		outfile = os.path.join(args.outfolder,'bam_filtered.bam')
 		between_reference(args.bampath, outfile, args.n,args.lib_min,args.lib_max)
 	elif args.which == 'filter_within':
 		outfile = os.path.join(args.outfolder,'bam_filtered.bam')
-		within_reference(args.bampath, outfile, args.n,args.lib_min,args.lib_max)
+		within_reference(args.bampath, outfile, args.n,args.lib_min,args.lib_max,args)
 	else:
 		print 'invalid call'
+
+
+
+

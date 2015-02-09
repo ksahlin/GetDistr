@@ -27,10 +27,8 @@ class Parameters(object):
 		self.outfolder = None
 		self.plots = None
 
-def collect_libstats(args,infile):
+def collect_libstats(args,infile,param):
 	info_file = open(infile,'r')
-	param = Parameters()
-	param.outfolder = args.outfolder
 	vals = filter( lambda line: line[0] != '#', info_file.readlines())[0:]
 	print vals
 	[mean,stddev] =  vals[0].strip().split()
@@ -51,46 +49,46 @@ def collect_libstats(args,infile):
 		length = int(length)
 		param.scaf_lengths[ref] = length
 
-	return param
 
-
-def filter_bamfile(args):
+def filter_bamfile(args,param):
 	bam_out = os.path.join(args.outfolder,'bam_filtered.bam')
-	filter_bam.within_reference(args.bampath, bam_out, args.n, args.lib_min, args.lib_max )
+	filter_bam.within_reference(args.bampath, bam_out, args.n, args.lib_min, args.lib_max, param )
 
-def get_lib_est(args):
+def get_lib_est(args,param):
 	bam_in = os.path.join(args.outfolder,'bam_filtered.bam')
 	lib_out = os.path.join(args.outfolder,'library_info.txt')
-	lib_est.LibrarySampler(bam_in,lib_out)
+	lib_est.LibrarySampler(bam_in,lib_out,param)
 
-def bp_stats(args):
+def bp_stats(args,param):
+	bam_in = os.path.join(args.outfolder,'bam_filtered.bam')
 	lib_out = os.path.join(args.outfolder,'library_info.txt')
-	param = collect_libstats(args,lib_out)
+	collect_libstats(args,lib_out, param)
 	get_bp_stats.parse_bam(bam_in, param)
 
-def gap_coordinates(args):
+def gap_coordinates(args,param):
 	gaps_out = os.path.join(args.outfolder,'gap_coordinates.txt')
 	get_gap_coordinates.get_gap_coordinates(args.assembly_file, gaps_out)
 
-def p_value_cluster(args):
+def p_value_cluster(args,param):
 	bp_file = os.path.join(args.outfolder,'bp_stats.txt')
 	gap_file = os.path.join(args.outfolder,'gap_coordinates.txt')
 	lib_out = os.path.join(args.outfolder,'library_info.txt')
-	param = collect_libstats(args,lib_out)
-	param.plots = args.plots
+
+	collect_libstats(args,lib_out,param)
 	cluster_p_vals.main(bp_file, gap_file,param)
 
-def main_pipline(args):
+def main_pipline(args,param):
 	"""
 		Algorithm a follows:
-			1 Estimate library parameters (lib_est) and print to library_info.txt.
-			2 Parse bamfile and get mean and stddev over each position in assembly (get_bp_stats)
+			1 Filter bam file to only consider interesting reads
+			2 Estimate library parameters (lib_est) and print to library_info.txt.
+			3 Parse bamfile and get mean and stddev over each position in assembly (get_bp_stats)
 				Print to bp_stats.csv
-			3 Get gap coordinates in assembly (get_gap_coordinates)
+			4 Get gap coordinates in assembly (get_gap_coordinates)
 				print to gap_coordinates.csv
-			4 Calculate pvalues based on expected span mean and stddev (calc_pvalues)
+			5 Calculate pvalues based on expected span mean and stddev (calc_pvalues)
 				print ctg_accesion, pos, pvalues to p_values.csv
-			5 Cluster p-values into significant cliques and print significant
+			5' Cluster p-values into significant cliques and print significant
 				locations on GFF format.
 
 
@@ -100,20 +98,23 @@ def main_pipline(args):
 		os.makedirs(args.outfolder)
 
 	# 1
+	bam_out = os.path.join(args.outfolder,'bam_filtered.bam')
+	filter_bamfile(args,param)
+
+	# 2
 	lib_out = os.path.join(args.outfolder,'library_info.txt')
-	lib_est.LibrarySampler(args.bampath,lib_out)
+	lib_est.LibrarySampler(bam_out,lib_out,param)
  
- 	# 2
-	param = collect_libstats(args,lib_out)
-	get_bp_stats.parse_bam(args.bampath, param)
+ 	# 3
+	collect_libstats(args,lib_out,param)
+	get_bp_stats.parse_bam(bam_out, param)
 
-	# 3
+	# 4
 	#get_gap_coordinates.
-	gap_coordinates(args)
+	gap_coordinates(args,param)
 
-	# 4 
-	p_value_cluster(args)
-	#cluster_pvals(args.outfolder, args.assembly_file, args.pval, args.window_size)
+	# 5-5' 
+	p_value_cluster(args,param)
 
 
 
@@ -129,6 +130,9 @@ if __name__ == '__main__':
 	pipeline.add_argument('bampath', type=str, help='bam file with mapped reads. ')
 	pipeline.add_argument('assembly_file', type=str, help='Fasta file with assembly/genome. ')
 	pipeline.add_argument('outfolder', type=str, help='Outfolder. ')
+	pipeline.add_argument('--n', dest='n', type=int, default=20, help='Neighborhood size. ')	
+	pipeline.add_argument('--lib_min', dest='lib_min', type=int, default=200, help='Minimum insert size (if in doubt, just set lib_min = 2*read_length). ')	
+	pipeline.add_argument('--lib_max', dest='lib_max', type=int, default=200000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
 	pipeline.add_argument('--plots', dest="plots", action='store_true', help='Plot pval distribution.')
 	pipeline.set_defaults(which='pipeline')
 
@@ -139,25 +143,29 @@ if __name__ == '__main__':
 	filter_parser.add_argument('--n', dest='n', type=int, default=20, help='Neighborhood size. ')	
 	filter_parser.add_argument('--lib_min', dest='lib_min', type=int, default=200, help='Minimum insert size (if in doubt, just set lib_min = 2*read_length). ')	
 	filter_parser.add_argument('--lib_max', dest='lib_max', type=int, default=200000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
+	filter_parser.add_argument('--plots', dest="plots", action='store_true', help='Plot isize distribution.')
 	filter_parser.set_defaults(which='filter')
 
 	# create the parser for the "lib_est" command	
 	lib_est_parser = subparsers.add_parser('lib_est', help='Estimate library parameters')
 	lib_est_parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
 	lib_est_parser.add_argument('outfolder', type=str, help='Outfolder. ')
+	lib_est_parser.add_argument('--plots', dest="plots", action='store_true', help='Plot pval distribution.')
 	lib_est_parser.set_defaults(which='lib_est')
 	
 	# create the parser for the "get_bp_stats" command
 	get_bp_stats_parser = subparsers.add_parser('get_bp_stats', help='Scan bam file and calculate pvalues for each base pair')
 	get_bp_stats_parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
 	get_bp_stats_parser.add_argument('outfolder', type=str, help='Outfolder. ')
+	get_bp_stats_parser.add_argument('--plots', dest="plots", action='store_true', help='Plot pval distribution.')
 	get_bp_stats_parser.set_defaults(which='get_bp_stats')
 
 	# create the parser for the "get_gaps" command
-	get_bp_stats_parser = subparsers.add_parser('get_gaps', help='Contig assembly file for gap positions')
-	get_bp_stats_parser.add_argument('assembly_file', type=str, help='Fasta file with assembly/genome. ')
-	get_bp_stats_parser.add_argument('outfolder', type=str, help='Outfolder. ')
-	get_bp_stats_parser.set_defaults(which='get_gaps')
+	get_gaps_stats_parser = subparsers.add_parser('get_gaps', help='Contig assembly file for gap positions')
+	get_gaps_stats_parser.add_argument('assembly_file', type=str, help='Fasta file with assembly/genome. ')
+	get_gaps_stats_parser.add_argument('outfolder', type=str, help='Outfolder. ')
+	get_gaps_stats_parser.add_argument('--plots', dest="plots", action='store_true', help='Plot pval distribution.')
+	get_gaps_stats_parser.set_defaults(which='get_gaps')
 
 	# create the parser for the "pvalue_cluster" command
 	pvalue_cluster_parser = subparsers.add_parser('cluster_pvals', help='Takes a pvalue file and clusters them into significan regions')
@@ -184,19 +192,31 @@ if __name__ == '__main__':
 		    print "couldn't find index file: ", args.bampath + '.bai', " check that the path is correct and that the bam file is sorted and indexed"
 		    sys.exit(0)
 	#print args
+	param = Parameters()
+	param.plots = args.plots
+	param.outfolder = args.outfolder
+
+	if not os.path.exists(param.outfolder):
+		os.makedirs(param.outfolder)
+	if param.plots:
+		param.plotfolder = os.path.join(param.outfolder,'plots')
+
+		if not os.path.exists(param.plotfolder):
+			os.makedirs(param.plotfolder)
+
 
 	if args.which == 'pipeline':
-		main_pipline(args)
+		main_pipline(args,param)
 	elif args.which == 'filter':
-		filter_bamfile(args)
+		filter_bamfile(args,param)
 	elif args.which == 'lib_est':
-		get_lib_est(args)
+		get_lib_est(args,param)
 	elif args.which == 'get_bp_stats':
-		bp_stats(args)
+		bp_stats(args,param)
 	elif args.which == 'get_gaps':
-		gap_coordinates(args)
+		gap_coordinates(args,param)
 	elif args.which == 'cluster_pvals':
-		p_value_cluster(args)
+		p_value_cluster(args,param)
 	else:
 		print 'invalid call'
 

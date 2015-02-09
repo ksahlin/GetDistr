@@ -7,10 +7,95 @@ import sys
 import os
 import pickle
 
-from mathstats.normaldist.normal import MaxObsDistr
 from statsmodels.distributions.empirical_distribution import ECDF
 
 import heapq
+
+try:
+	import matplotlib
+	matplotlib.use('agg')
+	import matplotlib.pyplot as plt
+except ImportError:
+	pass
+
+
+def plot_bp_specific_distr(infile, param):
+	means = {}
+	stddevs = {}
+	for i in [2, 51, 201,501]:
+		means[i]=[]
+		stddevs[i] = []
+
+	avg_mean = 0
+	avg_stddev = 0
+	avg_spancov = 0
+	tot_pos = 0
+
+	for line in infile:
+		[ref,pos, n_obs,mean,sigma] = line.strip().split()
+		n_obs = int(float(n_obs))
+		mean = float(mean)
+		sigma = float(sigma)
+		
+		if n_obs > 2:
+			avg_mean += mean
+			avg_stddev += sigma
+			avg_spancov += n_obs
+			tot_pos += 1
+
+		if 2 < n_obs <= 50:
+			means[2].append(mean)
+			stddevs[2].append(sigma)
+
+		elif 51 < n_obs <= 200:
+			means[51].append(mean)
+			stddevs[51].append(sigma)
+
+		elif 201 < n_obs <= 500:
+			means[201].append(mean)
+			stddevs[201].append(sigma)
+
+		elif 501 < n_obs:
+			means[501].append(mean)
+			stddevs[501].append(sigma)
+
+	# print len(m_1), len(m_2), len(m_3),len(m_4)
+	avg_mean = avg_mean / float(tot_pos)
+	avg_stddev = avg_stddev / float(tot_pos)
+	avg_spancov = avg_spancov /float(tot_pos)
+	print avg_mean,avg_stddev, avg_spancov
+
+	nr_obs, mu = zip(*filter(lambda x: means[x[0]] , means.iteritems()))
+	nr_obs, sigma = zip(*filter(lambda x: stddevs[x[0]] , stddevs.iteritems()))
+	nr_obs = list(nr_obs)
+	nr_obs.sort()
+	labels = []
+	for low,high in zip(nr_obs[:-1],nr_obs[1:]):
+		labels.append("{0}-{1} obs".format(low,high))
+	labels.append(">{0} obs".format(high))
+	plt.hist(mu, stacked=True, bins=100, log=True, label=labels)
+	plt.ylabel('Frequency (log scale)')
+	plt.xlabel('isize mean of mates spanning over position')
+	title = "Bp specific mean insert size (avg. over genome = %.2f)" % (avg_mean)
+	plt.title(title)
+	plt.legend( )
+	out = os.path.join(param.plotfolder, 'bp_specific_mean.pdf')
+	plt.savefig(out)
+	plt.close()
+
+	plt.hist(sigma, stacked=True, bins=100, log=True, label=labels)
+	plt.ylabel('Frequency (log scale)')
+	plt.xlabel('isize standard deviation of mates spanning over position')
+	title  = "Bp specific stddev of insert size (avg. over genome = %.2f)" % (avg_stddev)
+	plt.title(title)
+	plt.legend( )
+	out = os.path.join(param.plotfolder, 'bp_specific_stddev.pdf')
+	plt.savefig(out)
+	plt.savefig(out)
+	plt.close()
+
+
+
 
 class ECDF_hist(object):
 	"""docstring for ECDF_hist"""
@@ -179,6 +264,9 @@ def read_pair_generator(bam,param):
 
 
 def parse_bam(bam_file,param):
+
+
+
 	outfile = open(os.path.join(param.outfolder,'bp_stats.txt'),'w')
 
 	with pysam.Samfile(bam_file, 'rb') as bam:
@@ -203,7 +291,6 @@ def parse_bam(bam_file,param):
 			if abs(read.tlen) <= 2*param.read_length:
 				continue
 
-			counter += 1
 
 			current_coord = read.pos + read_len
 			current_ref = bam.getrname(read.tid)
@@ -264,9 +351,12 @@ def parse_bam(bam_file,param):
 				reads_fwd += 1
 				counter += 1
 		print 'Good read pair count: ', counter
-		print 'Proper reads:',counter
+
 		scanner.ecdf.make_ECDF()
 		scanner.ecdf.get_quantiles()
 		pickle.dump(scanner.ecdf, open(os.path.join(param.outfolder,'ecdf.pkl'),'w') )
-
+	outfile.close()
+	if param.plots:
+		infile = open(os.path.join(param.outfolder,'bp_stats.txt'),'r')
+		plot_bp_specific_distr(infile, param)
 

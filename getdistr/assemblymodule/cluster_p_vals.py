@@ -214,7 +214,7 @@ def read_in_gaps(gap_file_path):
 	return gap_coordinates
 
 def plot_stats(param,pvalues,mean_isizes):
-	pval_plot = os.path.join(param.outfolder,'pvalues.pdf')
+	pval_plot = os.path.join(param.plotfolder,'pvalues.pdf')
 	plt.hist(pvalues, bins=200)
 	plt.ylabel('Frequency ')
 	plt.xlabel('p-value')
@@ -224,7 +224,7 @@ def plot_stats(param,pvalues,mean_isizes):
 	plt.savefig(pval_plot)
 	plt.close()
 
-	isize_plot = os.path.join(param.outfolder,'isizes.pdf')
+	isize_plot = os.path.join(param.plotfolder,'isize_chain.pdf')
 	x = range(len(mean_isizes))
 	plt.plot(x, mean_isizes, '-')
 	plt.ylabel('mean isize')
