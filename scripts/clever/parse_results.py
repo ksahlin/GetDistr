@@ -14,38 +14,38 @@ def is_true_positive(pred_scaf,pred_start, pred_stop, true_breakpoints ):
 
 	return False
 
-Wrong here since both insertions and deletions can occur!!
-# def compare_deletions(infile, true_breakpoints, scaffold_tp_fp):
-# 	for line in infile:
+#Wrong here since both insertions and deletions can occur!!
+def compare_deletions(infile, true_breakpoints, scaffold_tp_fp):
+	for line in infile:
 
-# 		values = line.strip().split()
+		values = line.strip().split()
 
-# 		if values:
-# 			start, stop = int(values[1]), int(values[2])
-# 			ref_name = values[0]
+		if values:
+			start, stop = int(values[1]), int(values[2])
+			ref_name = values[0]
 
-# 			if is_true_positive(ref_name, start, stop, true_breakpoints):
-# 				scaffold_tp_fp[ref_name][0] += 1
-# 			else:
-# 				scaffold_tp_fp[ref_name][1] += 1
+			if is_true_positive(ref_name, start, stop, true_breakpoints):
+				scaffold_tp_fp[ref_name][0] += 1
+			else:
+				scaffold_tp_fp[ref_name][1] += 1
 
-# 	return scaffold_tp_fp	
+	return scaffold_tp_fp	
 
-# def compare_insertions(infile, true_breakpoints, scaffold_tp_fp):
-# 	for line in infile:
+def compare_insertions(infile, true_breakpoints, scaffold_tp_fp):
+	for line in infile:
 
-# 		values = line.strip().split()
+		values = line.strip().split()
 
-# 		if values:
-# 			start, length = int(values[1]), int(values[2])
-# 			ref_name = values[0]
-# 			stop = start + length
-# 			if is_true_positive(ref_name, start, stop, true_breakpoints):
-# 				scaffold_tp_fp[ref_name][0] += 1
-# 			else:
-# 				scaffold_tp_fp[ref_name][1] += 1
+		if values:
+			start, length = int(values[1]), int(values[2])
+			ref_name = values[0]
+			stop = start + length
+			if is_true_positive(ref_name, start, stop, true_breakpoints):
+				scaffold_tp_fp[ref_name][0] += 1
+			else:
+				scaffold_tp_fp[ref_name][1] += 1
 
-# 	return scaffold_tp_fp	
+	return scaffold_tp_fp	
 
 def get_true_breakpoints(true_breakpoints,variant_size, args):
 	if args.rhodo:

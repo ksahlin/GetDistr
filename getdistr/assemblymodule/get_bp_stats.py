@@ -67,12 +67,12 @@ def plot_bp_specific_distr(infile, param):
 
 	nr_obs, mu = zip(*filter(lambda x: means[x[0]] , means.iteritems()))
 	nr_obs, sigma = zip(*filter(lambda x: stddevs[x[0]] , stddevs.iteritems()))
-	nr_obs = list(nr_obs)
-	nr_obs.sort()
+	#nr_obs = list(nr_obs)
+	#nr_obs.sort()
 	labels = []
-	for low,high in zip(nr_obs[:-1],nr_obs[1:]):
-		labels.append("{0}-{1} obs".format(low,high))
-	labels.append(">{0} obs".format(high))
+	for low in nr_obs:
+		labels.append(">{0} obs".format(low))
+	#labels.append(">{0} obs".format(high))
 	plt.hist(mu, stacked=True, bins=100, log=True, label=labels)
 	plt.ylabel('Frequency (log scale)')
 	plt.xlabel('isize mean of mates spanning over position')
