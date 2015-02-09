@@ -59,13 +59,14 @@ def filter_bamfile(args):
 	filter_bam.within_reference(args.bampath, bam_out, args.n, args.lib_min, args.lib_max )
 
 def get_lib_est(args):
+	bam_in = os.path.join(args.outfolder,'bam_filtered.bam')
 	lib_out = os.path.join(args.outfolder,'library_info.txt')
-	lib_est.LibrarySampler(args.bampath,lib_out)
+	lib_est.LibrarySampler(bam_in,lib_out)
 
 def bp_stats(args):
 	lib_out = os.path.join(args.outfolder,'library_info.txt')
 	param = collect_libstats(args,lib_out)
-	get_bp_stats.parse_bam(args.bampath, param)
+	get_bp_stats.parse_bam(bam_in, param)
 
 def gap_coordinates(args):
 	gaps_out = os.path.join(args.outfolder,'gap_coordinates.txt')
