@@ -54,6 +54,13 @@ class Scanner(object):
 
 	def write_bp_stats_to_file(self,bp_index):
 		#print  '{0}\t{1}\t{2}\t{3}\t{4}'.format(self.ref_name, bp_index, self.n_obs, self.mu, self.var)
+		try:
+			math.sqrt(self.var)
+		except ValueError:
+			print 'Negative stddev:'
+			print '{0}\t{1}\t{2}\t{3}\t var:{4}'.format(self.ref_name, bp_index, self.n_obs, self.mu, self.var)
+			return
+
 		print >> self.outfile, '{0}\t{1}\t{2}\t{3}\t{4}'.format(self.ref_name, bp_index, int(self.n_obs), self.mu, math.sqrt(self.var))
 
 	def add_obs(self, isize):

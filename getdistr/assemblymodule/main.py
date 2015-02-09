@@ -5,6 +5,7 @@ import calc_pvalues
 import lib_est
 import get_bp_stats
 import get_gap_coordinates
+import filter_bam
 import cluster_p_vals
 
 import os,sys
@@ -46,11 +47,16 @@ def collect_libstats(args,infile):
 
 	param.scaf_lengths = {}
 	for line in vals[5:]:
-		ref,length = line.strip().split('|')
+		ref,length = line.strip().split('\t')
 		length = int(length)
 		param.scaf_lengths[ref] = length
 
 	return param
+
+
+def filter_bamfile(args):
+	bam_out = os.path.join(args.outfolder,'bam_filtered.bam')
+	filter_bam.within_reference(args.bampath, bam_out, args.n, args.lib_min, args.lib_max )
 
 def get_lib_est(args):
 	lib_out = os.path.join(args.outfolder,'library_info.txt')
@@ -125,6 +131,14 @@ if __name__ == '__main__':
 	pipeline.add_argument('--plots', dest="plots", action='store_true', help='Plot pval distribution.')
 	pipeline.set_defaults(which='pipeline')
 
+	# create the parser for the "filter" command	
+	filter_parser = subparsers.add_parser('filter', help='Filters bam file for better uniform coverage.')
+	filter_parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
+	filter_parser.add_argument('outfolder', type=str, help='Outfolder. ')
+	filter_parser.add_argument('--n', dest='n', type=int, default=20, help='Neighborhood size. ')	
+	filter_parser.add_argument('--lib_min', dest='lib_min', type=int, default=200, help='Minimum insert size (if in doubt, just set lib_min = 2*read_length). ')	
+	filter_parser.add_argument('--lib_max', dest='lib_max', type=int, default=200000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
+	filter_parser.set_defaults(which='filter')
 
 	# create the parser for the "lib_est" command	
 	lib_est_parser = subparsers.add_parser('lib_est', help='Estimate library parameters')
@@ -172,6 +186,8 @@ if __name__ == '__main__':
 
 	if args.which == 'pipeline':
 		main_pipline(args)
+	elif args.which == 'filter':
+		filter_bamfile(args)
 	elif args.which == 'lib_est':
 		get_lib_est(args)
 	elif args.which == 'get_bp_stats':

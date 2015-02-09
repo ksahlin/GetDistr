@@ -140,7 +140,7 @@ class LibrarySampler(object):
 		total_base_pairs = sum(reference_lengths)
 		print >> self.outfile,'{0}'.format(total_base_pairs)
 		for ref, length in ref_list:
-			print >> self.outfile,'{0}|{1}'.format(ref, length)
+			print >> self.outfile,'{0}\t{1}'.format(ref, length)
 
 
 	def get_weight(self,x,r,s):
@@ -233,8 +233,8 @@ def read_pair_generator(bam,max_isize):
 	# last reads
 	while True:
 		try:
-			min_pos,r1,r2 = heapq.heappop(read_pair_heap)
-			yield r1, r2
+			min_pos,r1,mate_pos = heapq.heappop(read_pair_heap)
+			yield r1, mate_pos
 		except IndexError:
 			break
 
