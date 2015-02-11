@@ -3,19 +3,25 @@ import argparse
 import os, sys
 from genomics_tools.file_formats.fasta import fasta_iter
 
-def is_true_positive(pred_scaf,pred_start, pred_stop, true_breakpoints ):
+def is_true_positive(pred_scaf,pred_start, pred_stop, true_breakpoints, mean_internal ):
+	# for start, stop in true_breakpoints[pred_scaf]:
+	# 	## in true expansion interval or contraction interval of a gap
+	# 	if (start <= pred_start <= stop) or (start <= pred_stop <= stop):
+	# 		#print pred_start, pred_stop, start,stop
+	# 		return True
+	# 	# a contracted break point in predicted interval 
+	# 	elif (pred_start <= start <= pred_stop) or (pred_start <= stop <= pred_stop):
+	# 		#print pred_start, pred_stop, start,stop
+	# 		return True  
+
 	for start, stop in true_breakpoints[pred_scaf]:
-		## in true expansion interval or contraction interval of a gap
-		if (start <= pred_start <= stop) or (start <= pred_stop <= stop):
+		# predicted break point is less than one internal segment size away
+		if ( abs(start - pred_start)  <= mean_internal ):
 			return True
-		# a contracted break point in predicted interval 
-		elif (pred_start <= start <= pred_stop) or (pred_start <= stop <= pred_stop):
-			return True  
 
 	return False
 
-#Wrong here since both insertions and deletions can occur!!
-def compare_deletions(infile, true_breakpoints, scaffold_tp_fp):
+def compare_deletions(infile, true_breakpoints, scaffold_tp_fp, mean_internal):
 	for line in infile:
 
 		values = line.strip().split()
@@ -23,24 +29,25 @@ def compare_deletions(infile, true_breakpoints, scaffold_tp_fp):
 		if values:
 			start, stop = int(values[1]), int(values[2])
 			ref_name = values[0]
-
-			if is_true_positive(ref_name, start, stop, true_breakpoints):
+			var_type = values[3]
+			if var_type == 'DEL' and is_true_positive(ref_name, start, stop, true_breakpoints, mean_internal) :
 				scaffold_tp_fp[ref_name][0] += 1
 			else:
 				scaffold_tp_fp[ref_name][1] += 1
 
 	return scaffold_tp_fp	
 
-def compare_insertions(infile, true_breakpoints, scaffold_tp_fp):
+def compare_insertions(infile, true_breakpoints, scaffold_tp_fp, mean_internal):
 	for line in infile:
 
 		values = line.strip().split()
 
 		if values:
 			start, length = int(values[1]), int(values[2])
+			var_type = values[3]
 			ref_name = values[0]
 			stop = start + length
-			if is_true_positive(ref_name, start, stop, true_breakpoints):
+			if var_type == 'INS' and is_true_positive(ref_name, start, stop, true_breakpoints, mean_internal) :
 				scaffold_tp_fp[ref_name][0] += 1
 			else:
 				scaffold_tp_fp[ref_name][1] += 1
@@ -50,7 +57,7 @@ def compare_insertions(infile, true_breakpoints, scaffold_tp_fp):
 def get_true_breakpoints(true_breakpoints,variant_size, args):
 	if args.rhodo:
 		for i  in range(100):
-			variant_start = 10000 + i*(20000 + min(0, variant_size)) #0 if insertion else negative
+			variant_start = 20000 + i*(20000 + min(0, variant_size)) #0 if insertion else negative
 			if variant_size > 0: # insertion in donor
 				variant_stop = variant_start + 1
 			else: #deletion in donor
@@ -62,7 +69,7 @@ def get_true_breakpoints(true_breakpoints,variant_size, args):
 			true_breakpoints['sequence_0-donor'].add((variant_start, variant_stop))
 	elif args.plasmid:
 		for i  in range(100):
-			variant_start = 10000 + i*(20000 + min(0, variant_size)) #0 if insertion else negative
+			variant_start = 20000 + i*(20000 + min(0, variant_size)) #0 if insertion else negative
 			if variant_size > 0: # insertion in donor
 				variant_stop = variant_start + 1
 			else: #deletion in donor
@@ -101,22 +108,27 @@ def main(args):
 			method = file_path.split('/')[-3]
 			#if method == "emperical":
 			#	continue
+			true_breakpoints, variants_TP_FP =  initialize_containers(args)
 			size = re.search('[0-9]+',file_path)
 			if size:
 				variant_size = int(size.group())
 			else:
 				variant_size = 0
-			result = re.search('del',file_path)
-			if result:
+			is_deletion_in_donor = re.search('ins',file_path)
+			if is_deletion_in_donor:
 				variant_size = -variant_size
-
-				true_breakpoints, variants_TP_FP =  initialize_containers(args)
-				true_breakpoints = get_true_breakpoints(true_breakpoints, variant_size, args)
-				variants_TP_FP = compare_deletions( open(file_path,'r'), true_breakpoints, variants_TP_FP)
+				variant_type = 'DEL'
+				
 			else:
-				true_breakpoints, variants_TP_FP =  initialize_containers(args)
-				true_breakpoints = get_true_breakpoints(true_breakpoints, variant_size, args)
-				variants_TP_FP = compare_insertions( open(file_path,'r'), true_breakpoints, variants_TP_FP)
+				variant_type = 'INS'
+				
+
+			true_breakpoints = get_true_breakpoints(true_breakpoints, variant_size, args)
+
+			if variant_type == 'INS':
+				variants_TP_FP = compare_insertions( open(file_path,'r'), true_breakpoints, variants_TP_FP, args.mean_internal)
+			else:
+				variants_TP_FP = compare_deletions( open(file_path,'r'), true_breakpoints, variants_TP_FP, args.mean_internal)
 
 
 			TPs = 0
@@ -163,6 +175,7 @@ if __name__ == '__main__':
     parser.add_argument('rootdir', type=str, help="root result folder ")
     parser.add_argument('--plasmid', dest='plasmid', action='store_true', help="Is plasmid genome")
     parser.add_argument('--rhodo', dest='rhodo', action='store_true', help="Is rhodo genome")
+    parser.add_argument('mean_internal', type=int, help="Mean internal segment size (excluding read length)")
 
 
     #parser.add_argument('clever_breaks', type=str, help="Tool's predicted SVs. ")
