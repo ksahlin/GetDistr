@@ -28,9 +28,11 @@ class Parameters(object):
 		self.scaf_lengths = {}
 		self.outfolder = None
 		self.plots = None
+		# self.lib_min = None
+		# self.lib_max = None
 
-def collect_libstats(args,infile,param):
-	info_file = open(infile,'r')
+def collect_libstats(args,outfolder,param):
+	info_file = open(os.path.join(outfolder,'library_info.txt'),'r')
 	vals = filter( lambda line: line[0] != '#', info_file.readlines())[0:]
 	print vals
 	[mean,stddev] =  vals[0].strip().split()
@@ -59,13 +61,11 @@ def filter_bamfile(args,param):
 
 def get_lib_est(args,param):
 	bam_in = os.path.join(args.outfolder,'bam_filtered.bam')
-	lib_out = os.path.join(args.outfolder,'library_info.txt')
-	lib_est.LibrarySampler(bam_in,lib_out,param)
+	lib_est.LibrarySampler(bam_in,args.outfolder,param)
 
 def bp_stats(args,param):
 	bam_in = os.path.join(args.outfolder,'bam_filtered.bam')
-	lib_out = os.path.join(args.outfolder,'library_info.txt')
-	collect_libstats(args,lib_out, param)
+	collect_libstats(args,args.outfolder, param)
 	get_bp_stats.parse_bam(bam_in, param)
 
 def gap_coordinates(args,param):
@@ -75,10 +75,7 @@ def gap_coordinates(args,param):
 def p_value_cluster(args,param):
 	bp_file = os.path.join(args.outfolder,'bp_stats.txt')
 	gap_file = os.path.join(args.outfolder,'gap_coordinates.txt')
-	lib_out = os.path.join(args.outfolder,'library_info.txt')
-
-
-	collect_libstats(args,lib_out,param)
+	collect_libstats(args,args.outfolder,param)
 	cluster_p_vals.main(bp_file, gap_file,param)
 
 def main_pipline(args,param):
@@ -107,11 +104,10 @@ def main_pipline(args,param):
 	filter_bamfile(args,param)
 
 	# 2
-	lib_out = os.path.join(args.outfolder,'library_info.txt')
-	lib_est.LibrarySampler(bam_out,lib_out,param)
+	lib_est.LibrarySampler(args.bampath,args.outfolder,param)
  
  	# 3
-	collect_libstats(args,lib_out,param)
+	collect_libstats(args,args.outfolder,param)
 	get_bp_stats.parse_bam(bam_out, param)
 
 	# 4
@@ -135,7 +131,7 @@ if __name__ == '__main__':
 	pipeline.add_argument('bampath', type=str, help='bam file with mapped reads. ')
 	pipeline.add_argument('assembly_file', type=str, help='Fasta file with assembly/genome. ')
 	pipeline.add_argument('outfolder', type=str, help='Outfolder. ')
-	pipeline.add_argument('--n', dest='n', type=int, default=10, help='Neighborhood size. ')	
+	pipeline.add_argument('--n', dest='n', type=int, default=1, help='Neighborhood size. ')	
 	pipeline.add_argument('--lib_min', dest='lib_min', type=int, default=200, help='Minimum insert size (if in doubt, just set lib_min = 2*read_length). ')	
 	pipeline.add_argument('--lib_max', dest='lib_max', type=int, default=200000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
 	pipeline.add_argument('--plots', dest="plots", action='store_true', help='Plot pval distribution.')
@@ -145,7 +141,7 @@ if __name__ == '__main__':
 	filter_parser = subparsers.add_parser('filter', help='Filters bam file for better uniform coverage.')
 	filter_parser.add_argument('bampath', type=str, help='bam file with mapped reads. ')
 	filter_parser.add_argument('outfolder', type=str, help='Outfolder. ')
-	filter_parser.add_argument('--n', dest='n', type=int, default=20, help='Neighborhood size. ')	
+	filter_parser.add_argument('--n', dest='n', type=int, default=1, help='Neighborhood size. ')	
 	filter_parser.add_argument('--lib_min', dest='lib_min', type=int, default=200, help='Minimum insert size (if in doubt, just set lib_min = 2*read_length). ')	
 	filter_parser.add_argument('--lib_max', dest='lib_max', type=int, default=200000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
 	filter_parser.add_argument('--plots', dest="plots", action='store_true', help='Plot isize distribution.')
@@ -200,6 +196,9 @@ if __name__ == '__main__':
 	param = Parameters()
 	param.plots = args.plots
 	param.outfolder = args.outfolder
+	# param.lib_min = args.lib_min
+	# param.lib_max = args.lib_max
+
 
 	if not os.path.exists(param.outfolder):
 		os.makedirs(param.outfolder)

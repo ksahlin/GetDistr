@@ -13,15 +13,6 @@ except ImportError:
 	pass
 
 
-def plot_isize(isizes,outfile):
-    plt.hist(isizes,bins=100)
-    plt.ylabel('frequency') 
-    plt.xlabel('fragment size')  
-    plt.title('Insert size distribution')
-    plt.legend( )
-    plt.savefig(outfile)
-    plt.close()
-    plt.clf()
 
 def is_proper_aligned_unique_innie(read):
     mapped_ok = not (read.is_unmapped or read.mate_is_unmapped)
@@ -214,8 +205,7 @@ def within_reference(bampath, outpath,n, min_isize, max_isize, param):
 	read_read1 = 0
 	read_read2 = 0
 	printed_fwd = set()
-	if param.plots:
-		isizes = []
+
 	for read, mate_pos in proper_read_isize(bamfile, min_isize, max_isize):
 		read_pos = read.pos
 
@@ -233,8 +223,6 @@ def within_reference(bampath, outpath,n, min_isize, max_isize, param):
 				# print to filtered bamfile
 				outfile.write(read)
 				printed_fwd.add(read.qname)
-				if param.plots:
-					isizes.append(read.tlen) 
 				reads_fwd += 1
 				if read.is_read1:
 					read_read1 += 1
@@ -262,9 +250,6 @@ def within_reference(bampath, outpath,n, min_isize, max_isize, param):
 	outfile.close()
 
 
-	if param.plots:
-		outfile = os.path.join(param.plotfolder, 'isize.png')
-		plot_isize(isizes, outfile)	
 
 def between_reference(bampath, outpath,n, min_isize, max_isize, param):
 	pass
@@ -279,7 +264,7 @@ if __name__ == '__main__':
 	filter_parser_within = subparsers.add_parser('filter_within', help='Filters bam file for paired reads within references for better uniform coverage.')
 	filter_parser_within.add_argument('bampath', type=str, help='bam file with mapped reads. ')
 	filter_parser_within.add_argument('outfolder', type=str, help='Outfolder. ')
-	filter_parser_within.add_argument('--n', dest='n', type=int, default=20, help='Neighborhood size. ')	
+	filter_parser_within.add_argument('--n', dest='n', type=int, default=1, help='Neighborhood size. ')	
 	filter_parser_within.add_argument('--lib_min', dest='lib_min', type=int, default=200, help='Minimum insert size (if in doubt, just set lib_min = 2*read_length). ')	
 	filter_parser_within.add_argument('--lib_max', dest='lib_max', type=int, default=200000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
 	filter_parser_within.add_argument('--plots', dest="plots", action='store_true', help='Plot pval distribution.')
@@ -289,7 +274,7 @@ if __name__ == '__main__':
 	filter_parser_between = subparsers.add_parser('filter_between', help='Filters bam file for paired reads on different references for better uniform coverage.')
 	filter_parser_between.add_argument('bampath', type=str, help='bam file with mapped reads. ')
 	filter_parser_between.add_argument('outfolder', type=str, help='Outfolder. ')
-	filter_parser_between.add_argument('--n', dest='n', type=int, default=20, help='Neighborhood size. ')	
+	filter_parser_between.add_argument('--n', dest='n', type=int, default=1, help='Neighborhood size. ')	
 	filter_parser_between.add_argument('--lib_max', dest='lib_max', type=int, default=20000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
 	filter_parser_between.set_defaults(which='filter_between')
 	

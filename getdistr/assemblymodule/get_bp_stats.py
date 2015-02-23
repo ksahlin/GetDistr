@@ -8,7 +8,7 @@ import os
 import pickle
 
 from statsmodels.distributions.empirical_distribution import ECDF
-
+import find_normal_parameters as fit
 import heapq
 
 try:
@@ -93,7 +93,14 @@ def plot_bp_specific_distr(infile, param):
 	plt.savefig(out)
 	plt.savefig(out)
 	plt.close()
+	stddevs = {}
 
+	out = os.path.join(param.plotfolder, 'fitted_params_avg_span.png')
+	bp_list= []
+	for key in means:
+		for mean in means[key]:
+			bp_list.append(mean) 
+	fit.main(bp_list, out)
 
 
 
