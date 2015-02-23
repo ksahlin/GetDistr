@@ -20,6 +20,8 @@ def plot_isize(isizes,outfile):
     plt.title('Insert size distribution')
     plt.legend( )
     plt.savefig(outfile)
+    plt.close()
+    plt.clf()
 
 def is_proper_aligned_unique_innie(read):
     mapped_ok = not (read.is_unmapped or read.mate_is_unmapped)

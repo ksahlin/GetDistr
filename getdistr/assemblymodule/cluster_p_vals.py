@@ -196,12 +196,14 @@ def normcdf(x, mu, sigma):
 
 
 def calc_pvalue(param, n_obs, mean, stddev):
-	one_sample_t = ( mean - param.adjusted_mu)/ (stddev/math.sqrt(n_obs))
-	if n_obs > 20:
-		return normcdf(one_sample_t,0. , 1.) # norm.cdf(one_sample_t)
+	effective_samples = param.ess_ratio * n_obs
+	one_sample_t = ( mean - param.adjusted_mu)/ (stddev/math.sqrt(effective_samples))
+	if effective_samples > 50:
+		cdf_val = normcdf(one_sample_t,0. , 1.)
 	else:
-		return t.cdf(one_sample_t, n_obs - 1)
-	#return area #min(area, 1.0-area) 
+		cdf_val = t.cdf(one_sample_t, effective_samples - 1)
+	
+	return 2*min( cdf_val, 1 - cdf_val)	
 
 
 
@@ -223,6 +225,7 @@ def plot_stats(param,pvalues,mean_isizes):
 	plt.legend( )
 	plt.savefig(pval_plot)
 	plt.close()
+	plt.clf()
 
 	isize_plot = os.path.join(param.plotfolder,'isize_chain.pdf')
 	x = range(len(mean_isizes))
@@ -234,6 +237,7 @@ def plot_stats(param,pvalues,mean_isizes):
 	plt.legend( )
 	plt.savefig(isize_plot)
 	plt.close()
+	plt.clf()
 
 
 
@@ -241,6 +245,10 @@ def main(bp_file_path, gap_file_path, param):
 	if param.plots == True:
 		p_values = []
 		mean_isize = []
+		p_values_naive = []
+		p_values_bias1 = []
+		p_values_bias2 = []
+
 
 	significant_regions = os.path.join(param.outfolder,'regions.gff')
 	ecdf = pickle.load(open(os.path.join(param.outfolder,'ecdf.pkl'),'r'))
@@ -254,30 +262,32 @@ def main(bp_file_path, gap_file_path, param):
 	for i, line in enumerate(open(bp_file_path,'r')):
 		scf, pos, n_obs, mean, stddev = line.strip().split()
 		pos, n_obs,mean,stddev = int(pos), float(n_obs), float(mean), float(stddev)
-		if float(n_obs) < 2 or float(mean) < 0:
+		# do not consider the very ends of a fererence or positions
+		# with less than 2 effective spanning observations
+		if (pos < param.adjusted_mu +3*param.adjusted_sigma) or (pos > param.scaf_lengths[scf] - param.adjusted_mu - 3*param.adjusted_sigma) or n_obs * param.ess_ratio < 2 or float(mean) < 0:
 			current_seq = -1
 			continue
 
-		quantile =  calc_pvalue(param, n_obs, mean, stddev)
+		p_value =  calc_pvalue(param, n_obs, mean, stddev)
 		if param.plots == True:
-			p_values.append(quantile)
+			p_values.append(p_value)
 			if i %1000 == 0:
 				mean_isize.append(mean)
 
 		if (scf != current_seq and pos >= param.max_window_size):
 			current_seq = scf
 			window = Window(param.pval, param.max_window_size, param.read_length)
-			window.update(pos, min(quantile, 1-quantile), mean)
+			window.update(pos, p_value, mean)
 		
 		elif pos >= param.max_window_size:
-			for significant_position in  window.update(pos, min(quantile, 1-quantile), mean):
+			for significant_position in  window.update(pos, p_value, mean):
 				avg_window_mean = window.avg_inner_mean + 2*window.read_length
 				if avg_window_mean > param.adjusted_mu:
 					sv_container.add_bp_to_cluster(current_seq, int(significant_position), window.avg_pval, n_obs, avg_window_mean, 'expansion', min(window.nr_in_window, window.max_window_size))
 				else:
 					sv_container.add_bp_to_cluster(current_seq, int(significant_position), window.avg_pval, n_obs, avg_window_mean, 'contraction', min(window.nr_in_window, window.max_window_size))
 		if i%10000 == 0:
-			print 'Processing coord',i, quantile, mean, stddev, n_obs, param.adjusted_mu
+			print 'Processing coord',i, p_value, mean, stddev, n_obs, param.adjusted_mu
 
 	if param.plots == True:
 		plot_stats(param, p_values,mean_isize)

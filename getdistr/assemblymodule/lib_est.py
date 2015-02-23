@@ -5,9 +5,10 @@ import bisect
 import random
 import pysam
 import heapq
+import numpy
 
 EMPIRICAL_BINS = 500
-SAMPLE_SIZE = 500000  # for estimating true full read pair distribution
+SAMPLE_SIZE = 2**32  # for estimating true full read pair distribution
 
 
 def AdjustInsertsizeDist(mean_insert, std_dev_insert, insert_list):
@@ -93,7 +94,7 @@ class LibrarySampler(object):
 				isize_list.append(read.tlen)
 				# if abs(read.tlen) > max_tlen:
 				# 	max_tlen = abs(read.tlen)
-			if sample_nr > SAMPLE_SIZE:
+			if sample_nr >= SAMPLE_SIZE:
 				break
 		self.bamfile.reset()
 		#max_tlen = max_tlen+1000
@@ -137,6 +138,12 @@ class LibrarySampler(object):
 		self.adjustedECDF_no_gap = self.get_correct_ECDF()
 		print >> self.outfile,'#Corrected mean:{0}, corrected stddev:{1}'.format(self.adjusted_mean, self.adjusted_stddev)
 		print >> self.outfile,'{0}\t{1}'.format(self.adjusted_mean, self.adjusted_stddev)
+
+		samples = min(SAMPLE_SIZE,len(isize_list))
+		ess = self.effectiveSampleSize(isize_list[:samples] )
+		print 'ESS:', ess
+		self.ess_ratio = ess / float(samples)
+		print >> self.outfile,'{0}'.format(self.ess_ratio)
 		reference_lengths = map(lambda x: int(x), self.bamfile.lengths)
 		ref_list = zip(self.bamfile.references, reference_lengths)
 		total_base_pairs = sum(reference_lengths)
@@ -150,6 +157,61 @@ class LibrarySampler(object):
 
 	def plot(self):
 		pass
+
+	def effectiveSampleSize(self, data, stepSize = 1) :
+		""" Effective sample size, as computed by BEAST Tracer.
+
+		:param data: sequence of real values
+		"""
+		import subprocess
+		proc = subprocess.Popen(['/path/to/RScript','/path/to/plottingfile.R'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		stdout, stderr = proc.communicate()
+	  
+	  # samples = len(data)
+
+	  # assert len(data) > 1,"no stats for short sequences"
+
+	  # maxLag = min(samples//3, 1000)
+
+	  # gammaStat = [0,]*maxLag
+	  # #varGammaStat = [0,]*maxLag
+
+	  # varStat = 0.0;
+
+	  # if type(data) != numpy.ndarray :
+	  #   data = numpy.array(data)
+
+	  # normalizedData = data - data.mean()
+	  
+	  # for lag in range(maxLag) :
+	  #   v1 = normalizedData[:samples-lag]
+	  #   v2 = normalizedData[lag:]
+	  #   v = v1 * v2
+	  #   gammaStat[lag] = sum(v) / len(v)
+	  #   #varGammaStat[lag] = sum(v*v) / len(v)
+	  #   #varGammaStat[lag] -= gammaStat[0] ** 2
+
+	  #   # print lag, gammaStat[lag], varGammaStat[lag]
+	    
+	  #   if lag == 0 :
+	  #     varStat = gammaStat[0]
+	  #   elif lag % 2 == 0 :
+	  #     s = gammaStat[lag-1] + gammaStat[lag]
+	  #     if s > 0 :
+	  #        varStat += 2.0*s
+	  #     else :
+	  #       break
+	      
+	  # # standard error of mean
+	  # # stdErrorOfMean = Math.sqrt(varStat/samples);
+
+	  # # auto correlation time
+	  # act = stepSize * varStat / gammaStat[0]
+
+	  # # effective sample size
+	  # ess = (stepSize * samples) / act
+
+	  return ess
 
 
 # def read_pair_generator(bam,max_isize):

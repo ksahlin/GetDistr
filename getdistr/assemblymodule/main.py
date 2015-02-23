@@ -23,7 +23,9 @@ class Parameters(object):
 		self.read_length = None
 		self.pval = None
 		self.total_basepairs = None
+		self.ess_ratio = None
 
+		self.scaf_lengths = {}
 		self.outfolder = None
 		self.plots = None
 
@@ -40,11 +42,12 @@ def collect_libstats(args,infile,param):
 	param.read_length = float(read_length)
 	print param.mu, param.sigma, param.adjusted_mu, param.adjusted_sigma, param.min_isize, param.max_isize, param.read_length
 	param.max_window_size = int(param.mu) if param.mu <= 1000 else int(param.mu)/2
-	param.total_basepairs = int(vals[4].strip().split()[0])
+	param.ess_ratio = float(vals[4].strip().split()[0])
+	param.total_basepairs = int(vals[5].strip().split()[0])
 	param.pval = 0.05/ param.total_basepairs # bonferroni correction
 
-	param.scaf_lengths = {}
-	for line in vals[5:]:
+	
+	for line in vals[6:]:
 		ref,length = line.strip().split('\t')
 		length = int(length)
 		param.scaf_lengths[ref] = length
@@ -74,6 +77,7 @@ def p_value_cluster(args,param):
 	gap_file = os.path.join(args.outfolder,'gap_coordinates.txt')
 	lib_out = os.path.join(args.outfolder,'library_info.txt')
 
+
 	collect_libstats(args,lib_out,param)
 	cluster_p_vals.main(bp_file, gap_file,param)
 
@@ -82,10 +86,11 @@ def main_pipline(args,param):
 		Algorithm a follows:
 			1 Filter bam file to only consider interesting reads
 			2 Estimate library parameters (lib_est) and print to library_info.txt.
+				(mu, sigam, adjusted mu, sigma, ESS etc.)
 			3 Parse bamfile and get mean and stddev over each position in assembly (get_bp_stats)
 				Print to bp_stats.csv
 			4 Get gap coordinates in assembly (get_gap_coordinates)
-				print to gap_coordinates.csv
+				print to gap_coordinates.csv 
 			5 Calculate pvalues based on expected span mean and stddev (calc_pvalues)
 				print ctg_accesion, pos, pvalues to p_values.csv
 			5' Cluster p-values into significant cliques and print significant
@@ -130,7 +135,7 @@ if __name__ == '__main__':
 	pipeline.add_argument('bampath', type=str, help='bam file with mapped reads. ')
 	pipeline.add_argument('assembly_file', type=str, help='Fasta file with assembly/genome. ')
 	pipeline.add_argument('outfolder', type=str, help='Outfolder. ')
-	pipeline.add_argument('--n', dest='n', type=int, default=20, help='Neighborhood size. ')	
+	pipeline.add_argument('--n', dest='n', type=int, default=10, help='Neighborhood size. ')	
 	pipeline.add_argument('--lib_min', dest='lib_min', type=int, default=200, help='Minimum insert size (if in doubt, just set lib_min = 2*read_length). ')	
 	pipeline.add_argument('--lib_max', dest='lib_max', type=int, default=200000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
 	pipeline.add_argument('--plots', dest="plots", action='store_true', help='Plot pval distribution.')
