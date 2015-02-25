@@ -7,8 +7,10 @@ import pickle
 
 try:
 	import matplotlib
-	matplotlib.use('pdf')
+	matplotlib.use('agg')
 	import matplotlib.pyplot as plt
+	import seaborn as sns
+	sns.set_palette("husl", desat=.6)
 except:
 	pass
 
@@ -216,7 +218,7 @@ def read_in_gaps(gap_file_path):
 	return gap_coordinates
 
 def plot_stats(param,pvalues,mean_isizes):
-	pval_plot = os.path.join(param.plotfolder,'pvalues.pdf')
+	pval_plot = os.path.join(param.plotfolder,'pvalues.eps')
 	plt.hist(pvalues, bins=200)
 	plt.ylabel('Frequency ')
 	plt.xlabel('p-value')
@@ -227,11 +229,11 @@ def plot_stats(param,pvalues,mean_isizes):
 	plt.close()
 	plt.clf()
 
-	isize_plot = os.path.join(param.plotfolder,'isize_chain.pdf')
+	isize_plot = os.path.join(param.plotfolder,'isize_chain.eps')
 	x = range(len(mean_isizes))
 	plt.plot(x, mean_isizes, '-')
 	plt.ylabel('mean isize')
-	plt.xlabel('genome coordinate every thousand bp')
+	plt.xlabel('reference position')
 	title = "Mean spanning isize"
 	plt.title(title)
 	plt.legend( )
@@ -271,7 +273,8 @@ def main(bp_file_path, gap_file_path, param):
 		p_value =  calc_pvalue(param, n_obs, mean, stddev)
 		if param.plots == True:
 			p_values.append(p_value)
-			if i %1000 == 0:
+			#plot a chain of avg insert size every 500 bp for the first million bp
+			if i %500 == 0 and i < 1000001:
 				mean_isize.append(mean)
 
 		if (scf != current_seq and pos >= param.max_window_size):

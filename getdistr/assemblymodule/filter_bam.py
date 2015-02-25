@@ -9,6 +9,8 @@ try:
 	import matplotlib
 	matplotlib.use('agg')
 	import matplotlib.pyplot as plt
+	import seaborn as sns
+	sns.set_palette("husl", desat=.6)
 except ImportError:
 	pass
 

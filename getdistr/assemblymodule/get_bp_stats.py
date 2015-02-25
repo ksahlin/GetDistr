@@ -15,6 +15,8 @@ try:
 	import matplotlib
 	matplotlib.use('agg')
 	import matplotlib.pyplot as plt
+	import seaborn as sns
+	sns.set_palette("husl", desat=.6)
 except ImportError:
 	pass
 
@@ -79,7 +81,7 @@ def plot_bp_specific_distr(infile, param):
 	title = "Bp specific mean insert size (avg. over genome = %.2f)" % (avg_mean)
 	plt.title(title)
 	plt.legend( )
-	out = os.path.join(param.plotfolder, 'bp_specific_mean.pdf')
+	out = os.path.join(param.plotfolder, 'bp_specific_mean.eps')
 	plt.savefig(out)
 	plt.close()
 
@@ -89,13 +91,13 @@ def plot_bp_specific_distr(infile, param):
 	title  = "Bp specific stddev of insert size (avg. over genome = %.2f)" % (avg_stddev)
 	plt.title(title)
 	plt.legend( )
-	out = os.path.join(param.plotfolder, 'bp_specific_stddev.pdf')
+	out = os.path.join(param.plotfolder, 'bp_specific_stddev.eps')
 	plt.savefig(out)
 	plt.savefig(out)
 	plt.close()
 	stddevs = {}
 
-	out = os.path.join(param.plotfolder, 'fitted_params_avg_span.png')
+	out = os.path.join(param.plotfolder, 'fitted_params_avg_span.eps')
 	bp_list= []
 	for key in means:
 		for mean in means[key]:
@@ -358,6 +360,16 @@ def parse_bam(bam_file,param):
 				reads_fwd += 1
 				counter += 1
 		print 'Good read pair count: ', counter
+
+		# calculate upper and lower true margin of error
+		stats_file = open(os.path.join(param.outfolder,'stats.txt'), 'a')
+		scanner.ecdf.means.sort()
+		total_pos = len(scanner.ecdf.means)
+		lower_index = int(total_pos*0.025)
+		upper_index = int(total_pos*0.975)
+
+		print >>  stats_file, 'True lower 0.025 quantile distance from mean:{0}'.format(param.mu - scanner.ecdf.means[lower_index])
+		print >>  stats_file, 'True upper  0.025 quantile distance from mean:{0}'.format(scanner.ecdf.means[upper_index] - param.mu )
 
 		scanner.ecdf.make_ECDF()
 		scanner.ecdf.get_quantiles()

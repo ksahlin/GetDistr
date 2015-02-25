@@ -28,6 +28,7 @@ class Parameters(object):
 		self.scaf_lengths = {}
 		self.outfolder = None
 		self.plots = None
+		self.stats_output = None
 		# self.lib_min = None
 		# self.lib_max = None
 
@@ -61,7 +62,7 @@ def filter_bamfile(args,param):
 
 def get_lib_est(args,param):
 	bam_in = os.path.join(args.outfolder,'bam_filtered.bam')
-	lib_est.LibrarySampler(bam_in,args.outfolder,param)
+	lib_est.LibrarySampler(bam_in,param)
 
 def bp_stats(args,param):
 	bam_in = os.path.join(args.outfolder,'bam_filtered.bam')
@@ -104,7 +105,7 @@ def main_pipline(args,param):
 	filter_bamfile(args,param)
 
 	# 2
-	lib_est.LibrarySampler(args.bampath,args.outfolder,param)
+	lib_est.LibrarySampler(args.bampath,param)
  
  	# 3
 	collect_libstats(args,args.outfolder,param)
@@ -196,6 +197,7 @@ if __name__ == '__main__':
 	param = Parameters()
 	param.plots = args.plots
 	param.outfolder = args.outfolder
+	param.stats_output = os.path.join(param.outfolder,'stats_output.txt')
 	# param.lib_min = args.lib_min
 	# param.lib_max = args.lib_max
 

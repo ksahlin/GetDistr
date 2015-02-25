@@ -1,28 +1,37 @@
+
+import os
+import math
 from itertools import ifilter
-from mathstats.normaldist.normal import MaxObsDistr
-from statsmodels.distributions.empirical_distribution import ECDF
 import bisect
 import random
+
+
 import pysam
-# import heapq
 import numpy
-import os
+from statsmodels.distributions.empirical_distribution import ECDF
+from rpy2 import robjects
+from rpy2.robjects import packages
 
 import assemblymodule.filter_bam as fb
 import find_normal_parameters as fit
-from rpy2 import robjects
-from rpy2.robjects import packages
+from mathstats.normaldist.normal import MaxObsDistr
+from mathstats.normaldist.truncatedskewed import param_est
+
+
 
 try:
 	import matplotlib
 	matplotlib.use('agg')
 	import matplotlib.pyplot as plt
+	import seaborn as sns
+	sns.set_palette("husl", desat=.6)
 except ImportError:
 	pass
 
 
 EMPIRICAL_BINS = 500
 SAMPLE_SIZE = 2**32  # for estimating true full read pair distribution
+NORMAL_QUANTILE_TWO_SIDED_95 = 1.96
 
 def plot_isize(isizes,outfile):
     plt.hist(isizes,bins=100)
@@ -60,13 +69,13 @@ def is_proper_aligned_unique_innie(read):
 
 class LibrarySampler(object):
 	"""docstring for LibrarySampler"""
-	def __init__(self, bampath,outfolder,param):
+	def __init__(self, bampath,param):
 		super(LibrarySampler, self).__init__()
 		self.bamfile = pysam.Samfile(bampath, 'rb')
 		self.bampath = bampath
 		self.param = param
-		self.stats_file = open(os.path.join(outfolder,'library_info.txt'), 'w')
-		self.isizes_file = open(os.path.join(outfolder,'isizes.txt'), 'w')
+		self.lib_file = open(os.path.join(param.outfolder,'library_info.txt'), 'w')
+		self.stats_file = open(os.path.join(param.outfolder,'stats.txt'), 'w')
 
 
 		self.sample_distribution()
@@ -149,14 +158,14 @@ class LibrarySampler(object):
 	 #   		isize_list.append(read)
 		# 	if sample_nr > SAMPLE_SIZE:
 		# 		break
-		print >> self.stats_file, '#Insert size sample size:', sample_nr
+		print >> self.lib_file, '#Insert size sample size:', sample_nr
 		
 		isize_list = filter(lambda x: 0 < x - 2*self.read_length,isize_list)
 		n_isize = float(len(isize_list))
 		mean_isize = sum(isize_list)/n_isize
 		std_dev_isize =  (sum(list(map((lambda x: x ** 2 - 2 * x * mean_isize + mean_isize ** 2), isize_list))) / (n_isize - 1)) ** 0.5
-		print >> self.stats_file,'#Mean before filtering :', mean_isize
-		print >> self.stats_file,'#Stddev before filtering: ', std_dev_isize
+		print >> self.lib_file,'#Mean before filtering :', mean_isize
+		print >> self.lib_file,'#Stddev before filtering: ', std_dev_isize
 		extreme_obs_occur = True
 		while extreme_obs_occur:
 			extreme_obs_occur, filtered_list = AdjustInsertsizeDist(mean_isize, std_dev_isize, isize_list)
@@ -166,11 +175,11 @@ class LibrarySampler(object):
 			isize_list = filtered_list
 
 		self.min_isize, self.max_isize = min(isize_list), max(isize_list) 
-		print >> self.stats_file,'#Mean converged:', mean_isize
-		print >> self.stats_file,'#Std_est converged: ', std_dev_isize
-		print >> self.stats_file,'{0}\t{1}'.format( mean_isize, std_dev_isize)
-		print >> self.stats_file,'{0}\t{1}'.format(self.min_isize, self.max_isize )
-		print >> self.stats_file,'{0}'.format(self.read_length)
+		print >> self.lib_file,'#Mean converged:', mean_isize
+		print >> self.lib_file,'#Std_est converged: ', std_dev_isize
+		print >> self.lib_file,'{0}\t{1}'.format( mean_isize, std_dev_isize)
+		print >> self.lib_file,'{0}\t{1}'.format(self.min_isize, self.max_isize )
+		print >> self.lib_file,'{0}'.format(self.read_length)
 
 		self.nobs = n_isize
 		self.mean = mean_isize
@@ -178,23 +187,47 @@ class LibrarySampler(object):
 		self.full_ECDF = ECDF(isize_list)
 		self.adjustedECDF_no_gap = None
 		self.adjustedECDF_no_gap = self.get_correct_ECDF()
-		print >> self.stats_file,'#Corrected mean:{0}, corrected stddev:{1}'.format(self.adjusted_mean, self.adjusted_stddev)
-		print >> self.stats_file,'{0}\t{1}'.format(self.adjusted_mean, self.adjusted_stddev)
-
+		print >> self.lib_file,'#Corrected mean:{0}, corrected stddev:{1}'.format(self.adjusted_mean, self.adjusted_stddev)
+		print >> self.lib_file,'{0}\t{1}'.format(self.adjusted_mean, self.adjusted_stddev)
 
 		samples = min(SAMPLE_SIZE,len(isize_list))
 		ess = self.effectiveSampleSize(isize_list[:samples])
-		print 'nr samples', samples
-		print 'ESS:', ess
-		print 'ESS_ratio:', ess / float(samples)
 		self.ess_ratio = ess / float(samples)
-		print >> self.stats_file,'{0}'.format(self.ess_ratio)
+		print >> self.lib_file,'{0}'.format(self.ess_ratio)
 		reference_lengths = map(lambda x: int(x), self.bamfile.lengths)
 		ref_list = zip(self.bamfile.references, reference_lengths)
-		total_base_pairs = sum(reference_lengths)
-		print >> self.stats_file,'{0}'.format(total_base_pairs)
+		total_basepairs = sum(reference_lengths)
+		print >> self.lib_file,'{0}'.format(total_basepairs)
 		for ref, length in ref_list:
-			print >> self.stats_file,'{0}\t{1}'.format(ref, length)
+			print >> self.lib_file,'{0}\t{1}'.format(ref, length)
+
+
+
+		print >> self.stats_file, 'Proper reads sampled:', samples
+		print >> self.stats_file, 'ESS of proper reads sampled:', ess
+		print >> self.stats_file, 'ESS_ratio:', self.ess_ratio
+		coverage = self.read_length*samples*2/float(total_basepairs)
+		print >> self.stats_file, 'Mean coverage proper reads:{0}'.format( coverage )
+		inner_span_coverage = coverage * (self.mean -2*self.read_length)/(2*self.read_length)
+		print >> self.stats_file, 'Average theoretical inner span coverage:{0}'.format( inner_span_coverage )
+		print >> self.stats_file, 'Mean full lib:{0}'.format(self.mean)
+		print >> self.stats_file, 'Stddev full lib:{0}'.format(self.stddev)
+		print >> self.stats_file, 'Emperically adjusted mean:{0}'.format(self.adjusted_mean)
+		print >> self.stats_file, 'Emperically adjusted stddev:{0}'.format(self.adjusted_stddev)
+		mu_naive = self.mean + self.stddev**2/float(self.mean - 2*self.read_length+1)
+		sigma_naive = math.sqrt(self.stddev**2 - self.stddev**4/(self.mean -2*self.read_length +1)**2 )
+		print >> self.stats_file, 'Naive adjusted mean:{0}'.format(mu_naive)
+		print >> self.stats_file, 'Naive adjusted stddev:{0}'.format(sigma_naive)
+		mu_sophisticated = param_est.mean_given_d(self.mean, self.stddev, self.read_length, total_basepairs, total_basepairs, 0)
+		sigma_sophisticated = param_est.stddev_given_d(self.mean, self.stddev, self.read_length, total_basepairs, total_basepairs, 0)
+		print >> self.stats_file, 'Sophisticated adjusted mean:{0}'.format(mu_sophisticated)
+		print >> self.stats_file, 'Sophisticated adjusted stddev:{0}'.format(sigma_sophisticated)
+		theoretical_margin_of_error = NORMAL_QUANTILE_TWO_SIDED_95*self.stddev / math.sqrt(inner_span_coverage)
+		print >> self.stats_file, 'Theoretical margin of error two sided 95%:{0}'.format(theoretical_margin_of_error)
+		self.stats_file.close()
+
+
+
 
 		if self.param.plots:
 			outfile = os.path.join(self.param.plotfolder, 'isize.png')
@@ -205,6 +238,9 @@ class LibrarySampler(object):
 
 	def get_weight(self,x,r,s):
 		return x - (2*(r-s)-1)
+
+	def lowest_bound_biological(self):
+		pass
 
 	def plot(self):
 		pass
