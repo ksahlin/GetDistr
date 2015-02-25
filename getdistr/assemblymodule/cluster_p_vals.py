@@ -197,16 +197,17 @@ def normcdf(x, mu, sigma):
     return y
 
 
-def calc_pvalue(param, n_obs, mean, stddev):
-	effective_samples = param.ess_ratio * n_obs
-	one_sample_t = ( mean - param.adjusted_mu)/ (stddev/math.sqrt(effective_samples))
-	if effective_samples > 50:
+def calc_cdf(mu_null, n, mean, stddev):
+	one_sample_t = ( mean - mu_null)/ (stddev/math.sqrt(n))
+	if n > 50:
 		cdf_val = normcdf(one_sample_t,0. , 1.)
 	else:
-		cdf_val = t.cdf(one_sample_t, effective_samples - 1)
+		cdf_val = t.cdf(one_sample_t, n - 1)
 	
-	return 2*min( cdf_val, 1 - cdf_val)	
+	return cdf_val	
 
+def calc_pvalue(cdf_val):
+	return 2*min( cdf_val, 1 - cdf_val)
 
 
 
@@ -217,21 +218,21 @@ def read_in_gaps(gap_file_path):
 		gap_coordinates[scf] = (int(start), int(stop))
 	return gap_coordinates
 
-def plot_stats(param,pvalues,mean_isizes):
-	pval_plot = os.path.join(param.plotfolder,'pvalues.eps')
-	plt.hist(pvalues, bins=200)
-	plt.ylabel('Frequency ')
-	plt.xlabel('p-value')
-	title = "p-value distribution"
-	plt.title(title)
+def plot_stats(outfile,values, title='',x='',y=''):
+	plt.hist(values, bins=200)
+	plt.ylabel(x)
+	plt.xlabel(y)
+	title_ = title
+	plt.title(title_)
 	plt.legend( )
-	plt.savefig(pval_plot)
+	plt.savefig(outfile)
 	plt.close()
 	plt.clf()
 
+def plot_mean_chain(param,mean_isizes):
 	isize_plot = os.path.join(param.plotfolder,'isize_chain.eps')
-	x = range(len(mean_isizes))
-	plt.plot(x, mean_isizes, '-')
+	x_axis = map(lambda x: x*500 ,range(len(mean_isizes)))
+	plt.plot(x_axis, mean_isizes, '-')
 	plt.ylabel('mean isize')
 	plt.xlabel('reference position')
 	title = "Mean spanning isize"
@@ -245,16 +246,20 @@ def plot_stats(param,pvalues,mean_isizes):
 
 def main(bp_file_path, gap_file_path, param):
 	if param.plots == True:
-		p_values = []
+		
 		mean_isize = []
 		p_values_naive = []
-		p_values_bias1 = []
-		p_values_bias2 = []
-
+		p_values_correct_bias1 = []
+		p_values_correct_bias2 = []
+		p_values_correct_both = []
+		cdf_values_naive = []
+		cdf_values_correct_bias1 = []
+		cdf_values_correct_bias2 = []
+		cdf_values_correct_both = []
 
 	significant_regions = os.path.join(param.outfolder,'regions.gff')
 	ecdf = pickle.load(open(os.path.join(param.outfolder,'ecdf.pkl'),'r'))
-	print ecdf.p_value_table
+	#print ecdf.p_value_table
 	gff_file =  open(significant_regions,'w')
 	gap_coordinates =  read_in_gaps(gap_file_path)
 	current_seq = -1
@@ -264,18 +269,51 @@ def main(bp_file_path, gap_file_path, param):
 	for i, line in enumerate(open(bp_file_path,'r')):
 		scf, pos, n_obs, mean, stddev = line.strip().split()
 		pos, n_obs,mean,stddev = int(pos), float(n_obs), float(mean), float(stddev)
-		# do not consider the very ends of a fererence or positions
+		# do not consider the very ends of a rererence or positions
 		# with less than 2 effective spanning observations
-		if (pos < param.adjusted_mu +3*param.adjusted_sigma) or (pos > param.scaf_lengths[scf] - param.adjusted_mu - 3*param.adjusted_sigma) or n_obs * param.ess_ratio < 2 or float(mean) < 0:
+		if (pos < param.adjusted_mu +3*param.adjusted_sigma) or (pos > param.scaf_lengths[scf] - param.adjusted_mu - 3*param.adjusted_sigma) or float(mean) < 0:
 			current_seq = -1
 			continue
 
-		p_value =  calc_pvalue(param, n_obs, mean, stddev)
+		effective_samples = param.ess_ratio * n_obs
+
+		# true cdf:
+		if n_obs * param.ess_ratio >= 2:
+			cdf_val = calc_cdf(param.adjusted_mu, effective_samples, mean, stddev)
+			p_value = calc_pvalue(cdf_val)
+
+
 		if param.plots == True:
-			p_values.append(p_value)
+			p_values_correct_both.append(p_value)
+			cdf_values_correct_both.append(cdf_val)
 			#plot a chain of avg insert size every 500 bp for the first million bp
 			if i %500 == 0 and i < 1000001:
 				mean_isize.append(mean)
+
+			# calculate p_values and plots for:
+
+			# no corrected bias
+			cdf_val_1_2 = calc_cdf(param.mu, n_obs, mean, stddev)
+			p_value_1_2 = calc_pvalue(cdf_val)
+			p_values_naive.append(p_value_1_2)
+			cdf_values_naive.append(cdf_val_1_2)
+
+			# correcting only bias 1
+			cdf_val_1 = calc_cdf(param.adjusted_mu, n_obs, mean, stddev)
+			p_value_1 = calc_pvalue(cdf_val)
+			p_values_correct_bias1.append(p_value_1)
+			cdf_values_correct_bias1.append(cdf_val_1)
+
+			# correcting only bias 2
+			if n_obs * param.ess_ratio >= 2:
+				cdf_val_2 = calc_cdf(param.mu, effective_samples, mean, stddev)
+				p_value_2 = calc_pvalue(cdf_val)
+				p_values_correct_bias2.append(p_value_2)
+				cdf_values_correct_bias2.append(cdf_val_2)
+
+
+		if n_obs * param.ess_ratio < 2:
+			continue
 
 		if (scf != current_seq and pos >= param.max_window_size):
 			current_seq = scf
@@ -293,7 +331,23 @@ def main(bp_file_path, gap_file_path, param):
 			print 'Processing coord',i, p_value, mean, stddev, n_obs, param.adjusted_mu
 
 	if param.plots == True:
-		plot_stats(param, p_values,mean_isize)
+		plot_mean_chain(param, mean_isize)
+		outfile = os.path.join(param.outfolder,'p_values_corr_1_2')
+		plot_stats(outfile, p_values_correct_both, title='p-value distribution', x='p-value',y='Frequency')
+		plot_stats(outfile, cdf_values_correct_both, title='CDF-value distribution', x='CDF-value',y='Frequency' )
+
+		outfile = os.path.join(param.outfolder,'p_values_corr_1')
+		plot_stats(outfile, p_values_correct_bias1, title='p-value distribution', x='p-value',y='Frequency')
+		plot_stats(outfile, cdf_values_correct_bias1, title='CDF-value distribution', x='CDF-value',y='Frequency' )
+
+		outfile = os.path.join(param.outfolder,'p_values_corr_2')
+		plot_stats(outfile, p_values_correct_bias2, title='p-value distribution', x='p-value',y='Frequency')
+		plot_stats(outfile, cdf_values_correct_bias2, title='CDF-value distribution', x='CDF-value',y='Frequency' )
+
+		outfile = os.path.join(param.outfolder,'p_values_naive')
+		plot_stats(outfile, p_values_naive, title='p-value distribution', x='p-value',y='Frequency')
+		plot_stats(outfile, cdf_values_naive, title='CDF-value distribution', x='CDF-value',y='Frequency' )
+
 
 	sv_container.get_final_bp_info()
 	print >> gff_file, str(sv_container)
