@@ -332,20 +332,24 @@ def main(bp_file_path, gap_file_path, param):
 
 	if param.plots == True:
 		plot_mean_chain(param, mean_isize)
-		outfile = os.path.join(param.outfolder,'p_values_corr_1_2')
+		outfile = os.path.join(param.plotfolder,'p_values_corr_1_2')
 		plot_stats(outfile, p_values_correct_both, title='p-value distribution', x='p-value',y='Frequency')
+		outfile = os.path.join(param.plotfolder,'cdf_values_corr_1_2')
 		plot_stats(outfile, cdf_values_correct_both, title='CDF-value distribution', x='CDF-value',y='Frequency' )
 
-		outfile = os.path.join(param.outfolder,'p_values_corr_1')
+		outfile = os.path.join(param.plotfolder,'p_values_corr_1')
 		plot_stats(outfile, p_values_correct_bias1, title='p-value distribution', x='p-value',y='Frequency')
+		outfile = os.path.join(param.plotfolder,'cdf_values_corr_1')		
 		plot_stats(outfile, cdf_values_correct_bias1, title='CDF-value distribution', x='CDF-value',y='Frequency' )
 
-		outfile = os.path.join(param.outfolder,'p_values_corr_2')
+		outfile = os.path.join(param.plotfolder,'p_values_corr_2')
 		plot_stats(outfile, p_values_correct_bias2, title='p-value distribution', x='p-value',y='Frequency')
+		outfile = os.path.join(param.plotfolder,'cdf_values_corr_2')
 		plot_stats(outfile, cdf_values_correct_bias2, title='CDF-value distribution', x='CDF-value',y='Frequency' )
 
-		outfile = os.path.join(param.outfolder,'p_values_naive')
+		outfile = os.path.join(param.plotfolder,'p_values_naive')
 		plot_stats(outfile, p_values_naive, title='p-value distribution', x='p-value',y='Frequency')
+		outfile = os.path.join(param.plotfolder,'cdf_values_naive')
 		plot_stats(outfile, cdf_values_naive, title='CDF-value distribution', x='CDF-value',y='Frequency' )
 
 
