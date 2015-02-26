@@ -290,29 +290,32 @@ def main(bp_file_path, gap_file_path, param):
 
 			# calculate p_values and plots for:
 
-			#correcting both biases
+			
 			if n_obs * param.ess_ratio >= 2:
+				#correcting both biases
 				p_values_correct_both.append(p_value)
 				cdf_values_correct_both.append(cdf_val)
-
-			# no corrected bias
-			cdf_val_1_2 = calc_cdf(param.mu, n_obs, mean, stddev)
-			p_value_1_2 = calc_pvalue(cdf_val_1_2)
-			p_values_naive.append(p_value_1_2)
-			cdf_values_naive.append(cdf_val_1_2)
-
-			# correcting only bias 1
-			cdf_val_1 = calc_cdf(param.adjusted_mu, n_obs, mean, stddev)
-			p_value_1 = calc_pvalue(cdf_val_1)
-			p_values_correct_bias1.append(p_value_1)
-			cdf_values_correct_bias1.append(cdf_val_1)
-
-			# correcting only bias 2
-			if n_obs * param.ess_ratio >= 2:
+			
+				# correcting only bias 2
 				cdf_val_2 = calc_cdf(param.mu, effective_samples, mean, stddev)
 				p_value_2 = calc_pvalue(cdf_val_2)
 				p_values_correct_bias2.append(p_value_2)
 				cdf_values_correct_bias2.append(cdf_val_2)
+
+			if n_obs >= 2:
+				# no corrected bias
+				cdf_val_1_2 = calc_cdf(param.mu, n_obs, mean, stddev)
+				p_value_1_2 = calc_pvalue(cdf_val_1_2)
+				p_values_naive.append(p_value_1_2)
+				cdf_values_naive.append(cdf_val_1_2)
+
+				# correcting only bias 1
+				cdf_val_1 = calc_cdf(param.adjusted_mu, n_obs, mean, stddev)
+				p_value_1 = calc_pvalue(cdf_val_1)
+				p_values_correct_bias1.append(p_value_1)
+				cdf_values_correct_bias1.append(cdf_val_1)
+
+
 
 
 		if n_obs * param.ess_ratio < 2:
