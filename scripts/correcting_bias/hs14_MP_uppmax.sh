@@ -1,8 +1,8 @@
 #!/bin/bash -l
 #SBATCH -A b2013169
 #SBATCH -p core -n 1
-#SBATCH -t 02:00:00
-#SBATCH -J staph-MP
+#SBATCH -t 1-10:00:00
+#SBATCH -J hs14-MP
 
 
 #####
@@ -12,8 +12,8 @@
 
 #########
 #TO SPECIFY
-INBASE='/proj/b2013169/private/data/genomes/staph/'
-OUTBASE='/home/kris/Work/GetDistr/two_bias/staph/'
+INBASE='/proj/b2013169/private/data/genomes/hs14/'
+OUTBASE='/home/kris/Work/GetDistr/two_bias/hs14/'
 
 #######
 

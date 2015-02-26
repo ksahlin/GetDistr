@@ -12,7 +12,7 @@ from statsmodels.distributions.empirical_distribution import ECDF
 from rpy2 import robjects
 from rpy2.robjects import packages
 
-import assemblymodule.filter_bam as fb
+#import assemblymodule.filter_bam as fb
 import find_normal_parameters as fit
 from mathstats.normaldist.normal import MaxObsDistr
 from mathstats.normaldist.truncatedskewed import param_est
