@@ -8,7 +8,7 @@ import os
 import pickle
 
 from statsmodels.distributions.empirical_distribution import ECDF
-import find_normal_parameters as fit
+from getdistr.assemblymodule import find_normal_parameters as fit
 import heapq
 
 try:
