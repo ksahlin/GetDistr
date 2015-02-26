@@ -16,11 +16,14 @@ INBASE='/proj/b2013169/private/data/genomes/staph/'
 OUTBASE='/home/kris/Work/GetDistr/two_bias/staph/'
 
 #######
-/proj/b2013169/private/data/genomes/staph
 
 #######
-rm -r "$OUTBASE"
-mkdir "$OUTBASE"
+if [ ! -d $OUTBASE ]; then
+    mkdir -p $OUTBASE
+else
+        rm -r $OUTBASE
+        mkdir -p $OUTBASE
+fi
 
 
 /usr/bin/time -v python /home/kris/git_repos/GetDistr/getdistr/assemblymodule/main.py pipeline \
