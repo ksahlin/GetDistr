@@ -367,9 +367,10 @@ def parse_bam(bam_file,param):
 		total_pos = len(scanner.ecdf.means)
 		lower_index = int(total_pos*0.025)
 		upper_index = int(total_pos*0.975)
+		true_mean = scanner.ecdf.means[int(total_pos*0.5)]
 
-		print >>  stats_file, 'True lower 0.025 quantile distance from mean:{0}'.format(param.adjusted_mu - scanner.ecdf.means[lower_index])
-		print >>  stats_file, 'True upper  0.025 quantile distance from mean:{0}'.format(scanner.ecdf.means[upper_index] - param.adjusted_mu)
+		print >>  stats_file, 'True lower 0.025 quantile distance from mean:{0}'.format(true_mean - scanner.ecdf.means[lower_index])
+		print >>  stats_file, 'True upper  0.025 quantile distance from mean:{0}'.format(scanner.ecdf.means[upper_index] - true_mean)
 
 		scanner.ecdf.make_ECDF()
 		scanner.ecdf.get_quantiles()
