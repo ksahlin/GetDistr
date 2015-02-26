@@ -26,7 +26,7 @@ else
 fi
 
 
-/usr/bin/time -v /home/kris/git_repos/GetDistr/getdistr/assemblymodule/python main.py pipeline \
+/usr/bin/time -v python /home/kris/git_repos/GetDistr/getdistr/assemblymodule/main.py pipeline \
        "$INBASE"aligned/ref/gage_mp_fr.bam \
         "$INBASE"/ref/genome.fasta \
         "$OUTBASE" \

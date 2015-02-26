@@ -1,6 +1,6 @@
 #!/bin/bash -l
 #SBATCH -A b2013169
-#SBATCH -p core -n 1
+#SBATCH -p core -n 3
 #SBATCH -t 3-10:00:00
 #SBATCH -J plasm-pe
 
