@@ -284,13 +284,16 @@ def main(bp_file_path, gap_file_path, param):
 
 
 		if param.plots == True:
-			p_values_correct_both.append(p_value)
-			cdf_values_correct_both.append(cdf_val)
 			#plot a chain of avg insert size every 500 bp for the first million bp
 			if i %500 == 0 and i < 1000001:
 				mean_isize.append(mean)
 
 			# calculate p_values and plots for:
+
+			#correcting both biases
+			if n_obs * param.ess_ratio >= 2:
+				p_values_correct_both.append(p_value)
+				cdf_values_correct_both.append(cdf_val)
 
 			# no corrected bias
 			cdf_val_1_2 = calc_cdf(param.mu, n_obs, mean, stddev)
