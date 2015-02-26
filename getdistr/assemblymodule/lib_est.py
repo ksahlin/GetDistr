@@ -13,7 +13,7 @@ from rpy2 import robjects
 from rpy2.robjects import packages
 
 #import assemblymodule.filter_bam as fb
-import find_normal_parameters as fit
+import getdistr.assemblymodule.find_normal_parameters as fit
 from mathstats.normaldist.normal import MaxObsDistr
 from mathstats.normaldist.truncatedskewed import param_est
 
@@ -135,7 +135,7 @@ class LibrarySampler(object):
 			if sample_nr >= SAMPLE_SIZE:
 				break
 
-		# for read, mate_pos in fb.proper_read_isize(self.bamfile, self.param.lib_min, self.param.lib_max):
+		# for read, mate_pos in fb.proper_read_isize(self.bamfile, self.param.lib_min, self.param.ligetdistr.assemblymodule.b_max):
 	 #  		sample_nr += 1
 	 #  		## add do insert size distribution calculation if proper pair
 	 #  		if read.tlen >= 0:
