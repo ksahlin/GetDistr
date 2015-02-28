@@ -184,7 +184,8 @@ class Scanner(object):
 		if self.position < pos:
 			for bp_index in range(self.position,pos):
 				self.write_bp_stats_to_file(bp_index)
-				self.ecdf.means.append(self.mu)
+				if self.n_obs > 0:
+					self.ecdf.means.append(self.mu)
 		self.position = pos
 
 def read_pair_generator(bam,param):
