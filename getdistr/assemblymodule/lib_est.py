@@ -230,9 +230,9 @@ class LibrarySampler(object):
 
 
 		if self.param.plots:
-			outfile = os.path.join(self.param.plotfolder, 'isize.png')
+			outfile = os.path.join(self.param.plotfolder, 'isize.eps')
 			plot_isize(isize_list, outfile)	
-			outfile = os.path.join(self.param.plotfolder, 'fitted_params_isize.png')
+			outfile = os.path.join(self.param.plotfolder, 'fitted_params_isize.eps')
 			fit.main(isize_list, outfile)
 
 

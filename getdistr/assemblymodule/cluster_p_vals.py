@@ -229,7 +229,7 @@ def plot_stats(outfile,values, title='',x='',y=''):
 	title_ = title
 	plt.title(title_)
 	plt.legend( )
-	plt.savefig(outfile)
+	plt.savefig(outfile + '.eps')
 	plt.close()
 	plt.clf()
 
