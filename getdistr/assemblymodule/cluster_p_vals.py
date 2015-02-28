@@ -219,6 +219,10 @@ def read_in_gaps(gap_file_path):
 	return gap_coordinates
 
 def plot_stats(outfile,values, title='',x='',y=''):
+	"""
+		plots an iterable of values, in this function it''s either p-values
+		or CDF values
+	"""
 	plt.hist(values, bins=200)
 	plt.ylabel(x)
 	plt.xlabel(y)
@@ -246,7 +250,7 @@ def plot_mean_chain(param,mean_isizes):
 
 def main(bp_file_path, gap_file_path, param):
 	if param.plots == True:
-		
+		good_pos = False # position where to start the isize chain plotting window
 		mean_isize = []
 		p_values_naive = []
 		p_values_correct_bias1 = []
@@ -266,6 +270,7 @@ def main(bp_file_path, gap_file_path, param):
 	sv_container = BreakPointContainer(param)
 
 
+	
 	for i, line in enumerate(open(bp_file_path,'r')):
 		scf, pos, n_obs, mean, stddev = line.strip().split()
 		pos, n_obs,mean,stddev = int(pos), float(n_obs), float(mean), float(stddev)
@@ -283,9 +288,13 @@ def main(bp_file_path, gap_file_path, param):
 			p_value = calc_pvalue(cdf_val)
 
 
+
 		if param.plots == True:
 			#plot a chain of avg insert size every 500 bp for the first million bp
-			if i %500 == 0 and i < 1000001:
+			if mean > 1:
+				# starting to plot the isize chain window at this position 
+				good_pos = True
+			if good_pos and i %500 == 0 and i < 1000001:
 				mean_isize.append(mean)
 
 			# calculate p_values and plots for:
