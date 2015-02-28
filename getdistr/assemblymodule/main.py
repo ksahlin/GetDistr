@@ -59,9 +59,9 @@ def filter_bamfile(args,param):
 	bam_out = os.path.join(args.outfolder,'bam_filtered.bam')
 	filter_bam.within_reference(args.bampath, bam_out, args.n, args.lib_min, args.lib_max, param )
 
-def get_lib_est(args,param):
-	bam_in = os.path.join(args.outfolder,'bam_filtered.bam')
-	lib_est.LibrarySampler(bam_in,param)
+def get_lib_est(bam_file,param):
+	#bam_in = os.path.join(args.outfolder,'bam_filtered.bam')
+	lib_est.LibrarySampler(bam_file, param)
 
 def bp_stats(args,param):
 	bam_in = os.path.join(args.outfolder,'bam_filtered.bam')
@@ -104,7 +104,7 @@ def main_pipline(args,param):
 	filter_bamfile(args,param)
 
 	# 2
-	lib_est.LibrarySampler(args.bampath,param)
+	lib_est.LibrarySampler(bam_out,param)
  
  	# 3
 	collect_libstats(args,args.outfolder,param)
@@ -215,7 +215,7 @@ if __name__ == '__main__':
 	elif args.which == 'filter':
 		filter_bamfile(args,param)
 	elif args.which == 'lib_est':
-		get_lib_est(args,param)
+		get_lib_est(args.bampath,param)
 	elif args.which == 'get_bp_stats':
 		bp_stats(args,param)
 	elif args.which == 'get_gaps':
