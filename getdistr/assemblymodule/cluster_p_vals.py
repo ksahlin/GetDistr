@@ -293,9 +293,12 @@ def main(bp_file_path, gap_file_path, param):
 			#plot a chain of avg insert size every 500 bp for the first million bp
 			if mean > 1:
 				# starting to plot the isize chain window at this position 
-				good_pos = True
-			if good_pos and i %500 == 0 and i < 1000001:
+				if not good_pos:
+					good_pos = 0.5
+			# take 2000 samples i a region of 1M bp.
+			if good_pos and i %500 == 0 and good_pos < 2001:
 				mean_isize.append(mean)
+				good_pos += 1
 
 			# calculate p_values and plots for:
 
