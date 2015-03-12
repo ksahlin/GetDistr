@@ -10,6 +10,8 @@
 	 "/proj/b2013072/private/svest_evaluation/tools_src/structural_variations/mrfstructvar"
 	 in our case.
 	4. Now your ready to go! Make sure to specify complete absolute path to the argument "outfolder".
+
+	Results are found in: outfolder/DATA/POST_PROCESSING/[chrQ]/chrQ.INDEL.txt   (where Q \in(1,22,X,Y)) (I remapped the organisms chr names to the humans)
 """
 import os
 import sys
