@@ -60,7 +60,7 @@ def set_data_parameters(args):
 	print ROOT
 
 	lines=''
-	for line in open(EXE_DIR_USER+"/mrfstructvar.properties",'r').readlines():
+	for line in open("/proj/b2013072/private/svest_evaluation/tools_src/structural_variations/mrfstructvar/mrfstructvar.properties",'r').readlines():
 		line = re.sub(r'DATA_DIR_USER=.+',r'DATA_DIR_USER="{0}"'.format(args.outfolder), line)
 		line = re.sub(r'EXE_DIR_USER=.+',r'EXE_DIR_USER="{0}"'.format(ROOT), line)
 		line = re.sub(r'RESULTS_DIR=.+',r'RESULTS_DIR=DATA_DIR_USER + "/DATA"', line)
@@ -72,23 +72,23 @@ def set_data_parameters(args):
 		lines += line
 		print line,
 
-	print >> open(EXE_DIR_USER+"/mrfstructvar.properties",'w'), lines 
+	print >> open("mrfstructvar.properties",'w'), lines 
 	
 	lines=''
-	for line in open(EXE_DIR_USER+"/MoDIL_simple.py",'r').readlines():
+	for line in open("MoDIL_simple.py",'r').readlines():
 		line = re.sub(r'MODIL_HOME=.+',r'MODIL_HOME="{0}"'.format(EXE_DIR_USER), line)
 		lines += line
 	print >> open("MoDIL_simple.py",'w'), lines
 
 	lines=''
-	for line in open(EXE_DIR_USER +"/MPProperties.py",'r').readlines():
+	for line in open("MPProperties.py",'r').readlines():
 		line = re.sub(r'MODIL_HOME=.+',r'MODIL_HOME="{0}"'.format(EXE_DIR_USER), line)
 		lines += line
 	print >> open("MPProperties.py",'w'), lines
 
 
 def run_setup():
-	p = subprocess.Popen(["python", EXE_DIR_USER+"/setup.py", "0"], stderr=subprocess.PIPE,stdout=subprocess.PIPE)
+	p = subprocess.Popen(["python", "setup.py", "0"], stderr=subprocess.PIPE,stdout=subprocess.PIPE)
 	output, err = p.communicate()
 	#print output
 	print err
@@ -96,7 +96,7 @@ def run_setup():
 	#output, err = p.communicate()
 
 def run_modil(reference_dict):
-	p = subprocess.Popen(["python", EXE_DIR_USER+"/setup.py", "1"],stderr=subprocess.PIPE,stdout=subprocess.PIPE) 
+	p = subprocess.Popen(["python", "setup.py", "1"],stderr=subprocess.PIPE,stdout=subprocess.PIPE) 
 	output, err = p.communicate()
 	print output
 	print err
