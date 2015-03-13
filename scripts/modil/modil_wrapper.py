@@ -90,35 +90,46 @@ def set_data_parameters(args):
 def run_setup():
 	p = subprocess.Popen(["python", "setup.py", "0"], stderr=subprocess.PIPE,stdout=subprocess.PIPE)
 	output, err = p.communicate()
-	#print output
+	p.kill()
+	print output
 	print err
 	#p = subprocess.Popen(["python","test/modil_demo.py"])
 	#output, err = p.communicate()
 
 def run_modil(reference_dict):
-	p = subprocess.Popen(["python", "setup.py", "1"],stderr=subprocess.PIPE,stdout=subprocess.PIPE) 
+	print 'RUNNING setup.py 1'
+	p = subprocess.Popen(["python", "setup.py", "1"],stderr=subprocess.PIPE,stdout=subprocess.PIPE, shell=True) 
 	output, err = p.communicate()
+	p.kill()
+
 	print output
 	print err
+	print 'STARTING ACTUAL MODIL'
+	stepsize=1000
+	steps=args.genome_length/stepsize
 	for ref in reference_dict:
-		p = subprocess.Popen(["python", EXE_DIR_USER+"/MoDIL_simple.py", "{0}".format(reference_dict[ref]), "0", "10000"],stderr=subprocess.PIPE,stdout=subprocess.PIPE) 
-		output, err = p.communicate()
-		print output
-		print err
-		p = subprocess.Popen(["python", EXE_DIR_USER+"/qsub_MoDIL_inference.py", "{0}".format(reference_dict[ref]), "0"],stderr=subprocess.PIPE,stdout=subprocess.PIPE) 
-		output, err = p.communicate()
-		print output
-		print err
+		for step in range(steps):
+			p = subprocess.Popen(["python", EXE_DIR_USER+"/MoDIL_simple.py", "{0}".format(reference_dict[ref]), "{0}".format(step), "{0}".format(stepsize)],stderr=subprocess.PIPE,stdout=subprocess.PIPE) 
+			output, err = p.communicate()
+			print output
+			print err
+			print 'DONE WITH MoDIL_simple.py STEP', step
+			p = subprocess.Popen(["python", EXE_DIR_USER+"/qsub_MoDIL_inference.py", "{0}".format(reference_dict[ref]), "{0}".format(step)],stderr=subprocess.PIPE,stdout=subprocess.PIPE) 
+			output, err = p.communicate()
+			print output
+			print err
+			print 'DONE WITH qsub_MoDIL_inference.py STEP', step
 		p = subprocess.Popen(["python", EXE_DIR_USER+"/post_processing/modil_post_processing.py", "{0}".format(reference_dict[ref])], stderr=subprocess.PIPE,stdout=subprocess.PIPE) 
 		output, err = p.communicate()
 		print output
 		print err
+		print 'DONE WITH modil_post_processing.py chr:', reference_dict[ref]
 
 def main(args):
 	set_data_parameters(args)
 	run_setup()
 	reference_dict = format_converter(pysam.Samfile(args.bam, 'rb'), args.outfolder, args)
-	run_modil(reference_dict)
+	run_modil(reference_dict,args)
 
 if __name__ == '__main__':
 
@@ -129,6 +140,8 @@ if __name__ == '__main__':
 	parser.add_argument('sd', type=int, help='lib_sd')
 	parser.add_argument('readlength', type=int, help='read length')
 	parser.add_argument('ess_ratio', type=float, help='Corrected sample size')
+	parser.add_argument('genome_length', type=int, help='genome length')
+
 
 	#TODO: Inject ess_ratio in model code somewhere!
 	args = parser.parse_args()
