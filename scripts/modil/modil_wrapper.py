@@ -19,7 +19,7 @@ import argparse
 import pysam
 import re
 import subprocess
-
+import shutil
 
 # Yes, a global..
 EXE_DIR_USER = os.path.dirname(os.path.abspath(__file__))
@@ -109,15 +109,14 @@ def run_modil(reference_dict,args):
 	# print output
 	# print err
 	print 'STARTING ACTUAL MODIL'
-	stepsize=1000
-	steps=args.genome_length/stepsize
+	steps=args.genome_length/args.stepsize
 	for ref in reference_dict:
 		for step in range(steps):
 			stdout_file = open(os.path.join(args.outfolder,'{0}.stdout').format(ref+'_'+str(step)),'w')
 			stderr_file = open(os.path.join(args.outfolder,'{0}.stderr').format(ref+'_'+str(step)), 'w')
 			p = subprocess.check_call(["python", EXE_DIR_USER+"/MoDIL_simple.py", \
 									"{0}".format(reference_dict[ref]), "{0}".format(step),\
-									 "{0}".format(stepsize)], stderr=stderr_file, stdout=stdout_file) 
+									 "{0}".format(args.stepsize)], stderr=stderr_file, stdout=stdout_file) 
 			# output, err = p.communicate()
 			# print output
 			# print err
@@ -159,10 +158,14 @@ if __name__ == '__main__':
 	parser.add_argument('readlength', type=int, help='read length')
 	parser.add_argument('ess_ratio', type=float, help='Corrected sample size')
 	parser.add_argument('genome_length', type=int, help='genome length')
+	parser.add_argument('step_size', type=int, default=100000, help='stepsize in modil (something related to speed/memory). set to smaller than genome size')
+
 
 
 	#TODO: Inject ess_ratio in model code somewhere!
 	args = parser.parse_args()
+	if os.path.exists(args.outfolder):
+		shutil.rmtree(args.outfolder)
 	if not os.path.exists(args.outfolder):
 		os.makedirs(args.outfolder)
 
