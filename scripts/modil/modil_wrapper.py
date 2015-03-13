@@ -60,7 +60,7 @@ def set_data_parameters(args):
 	print ROOT
 
 	lines=''
-	for line in open("/proj/b2013072/private/svest_evaluation/tools_src/structural_variations/mrfstructvar/mrfstructvar.properties",'r').readlines():
+	for line in open("mrfstructvar.properties",'r').readlines():
 		line = re.sub(r'DATA_DIR_USER=.+',r'DATA_DIR_USER="{0}"'.format(args.outfolder), line)
 		line = re.sub(r'EXE_DIR_USER=.+',r'EXE_DIR_USER="{0}"'.format(ROOT), line)
 		line = re.sub(r'RESULTS_DIR=.+',r'RESULTS_DIR=DATA_DIR_USER + "/DATA"', line)
@@ -70,7 +70,7 @@ def set_data_parameters(args):
 		line = re.sub(r'READ_LENGTH =.+',r'READ_LENGTH = {0}'.format(args.readlength), line)
 
 		lines += line
-		print line,
+		#print line,
 
 	print >> open("mrfstructvar.properties",'w'), lines 
 	
@@ -87,47 +87,65 @@ def set_data_parameters(args):
 	print >> open("MPProperties.py",'w'), lines
 
 
-def run_setup():
-	p = subprocess.Popen(["python", "setup.py", "0"], stderr=subprocess.PIPE,stdout=subprocess.PIPE)
-	output, err = p.communicate()
-	p.kill()
-	print output
-	print err
-	#p = subprocess.Popen(["python","test/modil_demo.py"])
+def run_setup(args):
+	stdout_file = open(os.path.join(args.outfolder,'setup0.stdout'),'w')
+	stderr_file = open(os.path.join(args.outfolder,'setup0.stderr'), 'w')
+	p = subprocess.check_call(["python", "setup.py", "0"], stderr=stderr_file,stdout=stdout_file)
+	# output, err = p.communicate()
+	# p.kill()
+	#print output
+	#print err
+	#p = subprocess.check_call(["python","test/modil_demo.py"])
 	#output, err = p.communicate()
 
-def run_modil(reference_dict):
+def run_modil(reference_dict,args):
 	print 'RUNNING setup.py 1'
-	p = subprocess.Popen(["python", "setup.py", "1"],stderr=subprocess.PIPE,stdout=subprocess.PIPE, shell=True) 
-	output, err = p.communicate()
-	p.kill()
+	stdout_file = open(os.path.join(args.outfolder,'setup1.stdout'),'w')
+	stderr_file = open(os.path.join(args.outfolder,'setup1.stderr'), 'w')
 
-	print output
-	print err
+	p = subprocess.check_call(["python", "setup.py", "1"],stderr=stderr_file, stdout=stdout_file) 
+	# output, err = p.communicate()
+
+	# print output
+	# print err
 	print 'STARTING ACTUAL MODIL'
 	stepsize=1000
 	steps=args.genome_length/stepsize
 	for ref in reference_dict:
 		for step in range(steps):
-			p = subprocess.Popen(["python", EXE_DIR_USER+"/MoDIL_simple.py", "{0}".format(reference_dict[ref]), "{0}".format(step), "{0}".format(stepsize)],stderr=subprocess.PIPE,stdout=subprocess.PIPE) 
-			output, err = p.communicate()
-			print output
-			print err
+			stdout_file = open(os.path.join(args.outfolder,'{0}.stdout').format(ref+'_'+str(step)),'w')
+			stderr_file = open(os.path.join(args.outfolder,'{0}.stderr').format(ref+'_'+str(step)), 'w')
+			p = subprocess.check_call(["python", EXE_DIR_USER+"/MoDIL_simple.py", \
+									"{0}".format(reference_dict[ref]), "{0}".format(step),\
+									 "{0}".format(stepsize)], stderr=stderr_file, stdout=stdout_file) 
+			# output, err = p.communicate()
+			# print output
+			# print err
 			print 'DONE WITH MoDIL_simple.py STEP', step
-			p = subprocess.Popen(["python", EXE_DIR_USER+"/qsub_MoDIL_inference.py", "{0}".format(reference_dict[ref]), "{0}".format(step)],stderr=subprocess.PIPE,stdout=subprocess.PIPE) 
-			output, err = p.communicate()
-			print output
+			p = subprocess.Popen(["python", EXE_DIR_USER+"/qsub_MoDIL_inference.py",\
+									"{0}".format(reference_dict[ref]), "{0}".format(step)],\
+									stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+			out,err = p.communicate()
+			print out
 			print err
+			# p = subprocess.check_call(["python", EXE_DIR_USER+"/qsub_MoDIL_inference.py",\
+			# 						 "{0}".format(reference_dict[ref]), "{0}".format(step)],\
+			# 						 stderr=stderr_file, stdout=stdout_file) 
+			# output, err = p.communicate()
+			# print output
+			# print err
 			print 'DONE WITH qsub_MoDIL_inference.py STEP', step
-		p = subprocess.Popen(["python", EXE_DIR_USER+"/post_processing/modil_post_processing.py", "{0}".format(reference_dict[ref])], stderr=subprocess.PIPE,stdout=subprocess.PIPE) 
-		output, err = p.communicate()
-		print output
-		print err
+		p = subprocess.check_call(["python", EXE_DIR_USER+"/post_processing/modil_post_processing.py",\
+									 "{0}".format(reference_dict[ref])], \
+									 stderr=stderr_file, stdout=stdout_file) 
+		# output, err = p.communicate()
+		# print output
+		# print err
 		print 'DONE WITH modil_post_processing.py chr:', reference_dict[ref]
 
 def main(args):
 	set_data_parameters(args)
-	run_setup()
+	run_setup(args)
 	reference_dict = format_converter(pysam.Samfile(args.bam, 'rb'), args.outfolder, args)
 	run_modil(reference_dict,args)
 
