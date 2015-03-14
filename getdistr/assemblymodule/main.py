@@ -28,6 +28,10 @@ class Parameters(object):
 		self.outfolder = None
 		self.plots = None
 		self.stats_output = None
+
+		self.nr_reads = 0
+		self.nr_mapped = 0
+		self.nr_proper_mapped = 0
 		# self.lib_min = None
 		# self.lib_max = None
 
@@ -56,8 +60,10 @@ def collect_libstats(args,outfolder,param):
 
 
 def filter_bamfile(args,param):
+	param.lib_min = args.lib_min
+	param.lib_max = args.lib_max
 	bam_out = os.path.join(args.outfolder,'bam_filtered.bam')
-	filter_bam.within_reference(args.bampath, bam_out, args.n, args.lib_min, args.lib_max, param )
+	filter_bam.within_reference(args.bampath, bam_out, args.n, param )
 
 def get_lib_est(bam_file,param):
 	#bam_in = os.path.join(args.outfolder,'bam_filtered.bam')

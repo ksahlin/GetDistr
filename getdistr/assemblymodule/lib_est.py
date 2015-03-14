@@ -125,19 +125,13 @@ class LibrarySampler(object):
 		#bam_filtered = ifilter(lambda r: is_proper_aligned_unique_innie(r), self.bamfile)
 		isize_list = []
 
-		nr_reads = 0
-		nr_mapped = 0
-		nr_proper_mapped = 0
+		#nr_reads = 0
+		#nr_mapped = 0
+		# nr_proper_mapped = 0
 		for sample_nr,read in enumerate(self.bamfile):
-
-			nr_reads += 1
-
-			if not read.is_unmapped:
-				nr_mapped += 1
-
 	  		## add do insert size distribution calculation if proper pair
 			if is_proper_aligned_unique_innie(read) and not  read.is_reverse:
-				nr_proper_mapped += 2 # add the read plus its mate since the mate does not enter here
+				self.param.nr_proper_mapped += 2 # add the read plus its mate since the mate does not enter here
 				assert read.tlen > 0
 				read_lengths.append(read.rlen)	
 				isize_list.append(read.tlen)
@@ -219,19 +213,20 @@ class LibrarySampler(object):
 		reference_lengths = map(lambda x: int(x), self.bamfile.lengths)
 		ref_list = zip(self.bamfile.references, reference_lengths)
 		total_basepairs = sum(reference_lengths)
+		self.param.total_basepairs = total_basepairs
 		print >> self.lib_file,'{0}'.format(total_basepairs)
 		for ref, length in ref_list:
 			print >> self.lib_file,'{0}\t{1}'.format(ref, length)
 
 
-		print >> self.stats_file, 'Total number of reads:', nr_reads
-		print >> self.stats_file, 'Total number of mapped reads:', nr_mapped
-		print >> self.stats_file, 'Total number of properly mapped reads:', nr_proper_mapped
-		print >> self.stats_file, 'Percentage of reads mapped:', nr_mapped/float(nr_reads)
-		print >> self.stats_file, 'Percentage of proper read pairs mapped:', nr_proper_mapped/float(nr_reads)
-		print >> self.stats_file, 'Coverage total reads:', nr_reads/float(total_basepairs)
-		print >> self.stats_file, 'Coverage total mapped:', nr_mapped/float(total_basepairs)
-		print >> self.stats_file, 'Coverage total proper mapped:', nr_proper_mapped/float(total_basepairs)
+		print >> self.stats_file, 'Total number of reads:', self.param.nr_reads
+		print >> self.stats_file, 'Total number of mapped reads:', self.param.nr_mapped
+		print >> self.stats_file, 'Total number of properly mapped reads:', self.param.nr_proper_mapped
+		print >> self.stats_file, 'Percentage of reads mapped:', self.param.nr_mapped/float(self.param.nr_reads)
+		print >> self.stats_file, 'Percentage of proper read pairs mapped:', self.param.nr_proper_mapped/float(self.param.nr_reads)
+		print >> self.stats_file, 'Coverage total reads:', self.param.nr_reads/float(total_basepairs)
+		print >> self.stats_file, 'Coverage total mapped:', self.param.nr_mapped/float(total_basepairs)
+		print >> self.stats_file, 'Coverage total proper mapped:', self.param.nr_proper_mapped/float(total_basepairs)
 
 		print >> self.stats_file, 'Proper reads sampled:', samples
 		print >> self.stats_file, 'ESS of proper reads sampled:', ess

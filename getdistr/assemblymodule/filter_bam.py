@@ -16,6 +16,7 @@ except ImportError:
 
 
 
+
 def is_proper_aligned_unique_innie(read):
     mapped_ok = not (read.is_unmapped or read.mate_is_unmapped)
     orientation_ok = (read.is_reverse and not read.mate_is_reverse and read.tlen < 0) or \
@@ -26,13 +27,18 @@ def is_proper_aligned_unique_innie(read):
     return mapped_ok and orientation_ok and quality_ok and same_ref
 
 
-def read_pair_generator(bam,max_isize):
+def read_pair_generator(bam,max_isize,param):
 	read_pairs = {}
 	read_pair_heap = []
 	#visited = set()
 	prev_read_ref = None
 	bam_filtered = ifilter(lambda r: r.flag <= 255, bam)
 	for read in bam_filtered:
+		
+		param.nr_reads += 1
+		if not read.is_unmapped:
+			param.nr_mapped += 1
+
 		if read.tid != prev_read_ref  and prev_read_ref != None:
 			while True:
 				try:
@@ -115,7 +121,7 @@ def read_pair_generator(bam,max_isize):
 			break
 
 
-def proper_read_isize(bam, min_isize, max_isize):
+def proper_read_isize(bam, min_isize, max_isize, param):
 	current_scaf = -1
 	reads_fwd = 0
 	reads_rev = 0
@@ -123,7 +129,7 @@ def proper_read_isize(bam, min_isize, max_isize):
 	already_sampled = set()
 	duplicates = set()
 
-	for i,(read,mpos) in enumerate(read_pair_generator(bam,max_isize)):
+	for i,(read,mpos) in enumerate(read_pair_generator(bam,max_isize,param)):
 		if abs(read.tlen) <= min_isize:
 			continue
 
@@ -192,11 +198,14 @@ class CorrelatedSample(object):
 		return False
 
 
-def within_reference(bampath, outpath,n, min_isize, max_isize, param):
+def within_reference(bampath, outpath,n, param):
 	"""
 		Assumes that reads are aligned in PE orientation
 
 	"""
+
+	min_isize, max_isize = param.lib_min, param.lib_max
+
 	correlated_check = CorrelatedSample(n)
 	bamfile = pysam.Samfile(bampath, 'rb')
 	outfile = pysam.Samfile(outpath, 'wb', template=bamfile)
@@ -208,7 +217,7 @@ def within_reference(bampath, outpath,n, min_isize, max_isize, param):
 	read_read2 = 0
 	printed_fwd = set()
 
-	for read, mate_pos in proper_read_isize(bamfile, min_isize, max_isize):
+	for read, mate_pos in proper_read_isize(bamfile, min_isize, max_isize, param):
 		read_pos = read.pos
 
 		# remove unactive samples (read1 is more than n bp away)
