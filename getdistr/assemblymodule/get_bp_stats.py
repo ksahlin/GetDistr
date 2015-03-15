@@ -6,6 +6,7 @@ import pysam
 import sys
 import os
 import pickle
+from collections import defaultdict
 
 from statsmodels.distributions.empirical_distribution import ECDF
 from getdistr.assemblymodule import find_normal_parameters as fit
@@ -180,12 +181,15 @@ class Scanner(object):
 		self.mu = self.o / self.n_obs  #(self.n_obs * self.mu + isize)/ float(self.n_obs+1)
 		self.var = 1/(self.n_obs -1)* (self.o_sq - 2*self.mu*self.o + self.n_obs*self.mu**2) #(self.n_obs * self.var + isize**2)/ float(self.n_obs+1)
 
-	def update_pos(self,pos):
+	def update_pos(self,pos,sample_dict,lib_mu):
 		if self.position < pos:
 			for bp_index in range(self.position,pos):
 				self.write_bp_stats_to_file(bp_index)
-				if self.n_obs > 0:
+				if self.n_obs > 1:
 					self.ecdf.means.append(self.mu)
+					sample_dict[self.n_obs].append(self.mu)
+			# if self.n_obs > 1 and self.position % int(lib_mu) == 0:
+			# 	sample_dict[self.n_obs].append(self.mu)
 		self.position = pos
 
 def read_pair_generator(bam,param):
@@ -278,7 +282,7 @@ def parse_bam(bam_file,param):
 
 
 	outfile = open(os.path.join(param.outfolder,'bp_stats.txt'),'w')
-
+	sample_dict = defaultdict(list)
 	with pysam.Samfile(bam_file, 'rb') as bam:
 		reference_lengths = dict(zip(bam.references, map(lambda x: int(x), bam.lengths)))
 		current_scaf = -1
@@ -328,11 +332,11 @@ def parse_bam(bam_file,param):
 				scanner = Scanner(current_ref,outfile)
 				scanner.ecdf = ecdf_
 
-				scanner.update_pos(current_coord)
+				scanner.update_pos(current_coord,sample_dict, param.mu)
 				scaf_length = reference_lengths[current_ref]
 				current_scaf = current_ref 
 			else:
-				scanner.update_pos(current_coord)
+				scanner.update_pos(current_coord,sample_dict, param.mu)
 
 			if read.is_reverse: #read.qname in visited and read.is_reverse:
 				assert read.tlen < 0
@@ -378,7 +382,38 @@ def parse_bam(bam_file,param):
 		scanner.ecdf.get_quantiles()
 		pickle.dump(scanner.ecdf, open(os.path.join(param.outfolder,'ecdf.pkl'),'w') )
 	outfile.close()
+
 	if param.plots:
 		infile = open(os.path.join(param.outfolder,'bp_stats.txt'),'r')
 		plot_bp_specific_distr(infile, param)
+
+
+	emp_sum = 0 
+	the_sum = 0
+	tot_obs_count = 0
+	print sample_dict
+	for n in sample_dict:
+		obs_count = float(len(sample_dict[n]))
+		if  obs_count < 2:
+			continue
+
+		emperical_avg_est = sum(sample_dict[n])/obs_count
+		theoretical_se = param.sigma/math.sqrt(n)
+		
+		print 'N:',n
+		print 'THE:',theoretical_se
+		emperical_standard_error =  (sum(list(map((lambda x: x ** 2 - 2 * x * emperical_avg_est + emperical_avg_est ** 2), sample_dict[n]))) / (obs_count - 1)) ** 0.5
+		if emperical_standard_error > 0:
+			print 'EMP:',emperical_standard_error
+			print sample_dict[n]
+			tot_obs_count += obs_count
+			emp_sum += emperical_standard_error * obs_count 
+			the_sum += theoretical_se * obs_count
+
+	param.ess_ratio =  min(the_sum /emp_sum,1) 
+	stats_file = open(os.path.join(param.outfolder,'stats.txt'), 'a')
+	print >> stats_file, 'ESS_ratio:', param.ess_ratio
+	stats_file.close()
+
+
 

@@ -209,7 +209,7 @@ class LibrarySampler(object):
 		samples = min(SAMPLE_SIZE,len(isize_list))
 		ess = self.effectiveSampleSize(isize_list[:samples])
 		self.ess_ratio = ess / float(samples)
-		print >> self.lib_file,'{0}'.format(self.ess_ratio)
+		print >> self.stats_file,'{0}'.format(self.ess_ratio)
 		reference_lengths = map(lambda x: int(x), self.bamfile.lengths)
 		ref_list = zip(self.bamfile.references, reference_lengths)
 		total_basepairs = sum(reference_lengths)
@@ -229,8 +229,8 @@ class LibrarySampler(object):
 		print >> self.stats_file, 'Coverage total proper mapped:', self.param.nr_proper_mapped/float(total_basepairs)
 
 		print >> self.stats_file, 'Proper reads sampled:', samples
-		print >> self.stats_file, 'ESS of proper reads sampled:', ess
-		print >> self.stats_file, 'ESS_ratio:', self.ess_ratio
+		#print >> self.stats_file, 'ESS of proper reads sampled:', ess
+		#print >> self.stats_file, 'ESS_ratio:', self.ess_ratio
 		coverage = self.read_length*samples*2/float(total_basepairs)
 		print >> self.stats_file, 'Mean coverage proper reads:{0}'.format( coverage )
 		inner_span_coverage = coverage * (self.mean -2*self.read_length)/(2*self.read_length)
@@ -270,59 +270,51 @@ class LibrarySampler(object):
 	def plot(self):
 		pass
 
-	def effectiveSampleSize(self,data) :
+	def effectiveSampleSize_by_sampling(self,data):
+		""" 
+			Effective sample size by comparing emperical sample error to,
+			theoretical sample error 
+		"""	
+
+	def effectiveSampleSize(self,data):
 		""" 
 			Effective sample size, as computed by EffectiveSize in coda, R.
 			returns a python float, the ess
 		"""
 		robjects.packages.importr("coda")
 		r = robjects.r
-		data = numpy.array(data)
-		normalizedData = data - data.mean()
+		# number_of_samples = len(data)
+		# max_batches = number_of_samples / 10000
+		# ess_list = []
+		# for nr_batches in range(1, max_batches+1):
+		# 	chunk_size = number_of_samples / nr_batches
+		# 	print chunk_size
+		# 	ess_list.append([]) 
+		# 	for chunk in chunks(data,chunk_size):
+		# 		# dont look at the small rest chunk
+		# 		if len(chunk) == chunk_size:
+		# 			array_data = numpy.array(chunk)
+		# 			normalizedData = array_data - array_data.mean()
+		# 			rData = robjects.IntVector(normalizedData)
+		# 			mcmc_r = r.mcmc(rData)	 
+		# 			ess_list[-1].append( list(r.effectiveSize(mcmc_r))[0] )
+
+		# print ess_list
+		# sum_ess = 0
+
+		# for i, ess_vector in enumerate(ess_list):
+		# 	sum_ess +=  sum(ess_vector)
+		# avg_ess = sum_ess / len(ess_list)
+		# return avg_ess
+		
+		array_data = numpy.array(data)
+		normalizedData = array_data - array_data.mean()
 		rData = robjects.IntVector(normalizedData)
 		mcmc_r = r.mcmc(rData)	 
 		return list(r.effectiveSize(mcmc_r))[0]
 
-	  # samples = len(data)
-
-	  # assert len(data) > 1,"no stats for short sequences"
-
-	  # maxLag = min(samples//3, 1000)
-
-	  # gammaStat = [0,]*maxLag
-	  # #varGammaStat = [0,]*maxLag
-
-	  # varStat = 0.0;
-
-	  # if type(data) != numpy.ndarray :
-	  #   data = numpy.array(data)
-
-	  # normalizedData = data - data.mean()
-	  
-	  # for lag in range(maxLag) :
-	  #   v1 = normalizedData[:samples-lag]
-	  #   v2 = normalizedData[lag:]
-	  #   v = v1 * v2
-	  #   gammaStat[lag] = sum(v) / len(v)
-	  #   #varGammaStat[lag] = sum(v*v) / len(v)
-	  #   #varGammaStat[lag] -= gammaStat[0] ** 2
-
-	  #   # print lag, gammaStat[lag], varGammaStat[lag]
-	    
-	  #   if lag == 0 :
-	  #     varStat = gammaStat[0]
-	  #   elif lag % 2 == 0 :
-	  #     s = gammaStat[lag-1] + gammaStat[lag]
-	  #     if s > 0 :
-	  #        varStat += 2.0*s
-	  #     else :
-	  #       break
-	      
-	  # # standard error of mean
-	  # # stdErrorOfMean = Math.sqrt(varStat/samples);
-
-	  # # auto correlation time
-	  # act = stepSize * varStat / gammaStat[0]
-
-	  # # effective sample size
-	  # ess = (stepSize * samples) / act
+def chunks(l, n):
+    """ Yield successive n-sized chunks from l.
+    """
+    for i in xrange(0, len(l), n):
+        yield l[i:i+n]
