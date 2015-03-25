@@ -209,7 +209,7 @@ class LibrarySampler(object):
 		samples = min(SAMPLE_SIZE,len(isize_list))
 		ess = self.effectiveSampleSize(isize_list[:samples])
 		self.ess_ratio = ess / float(samples)
-		print >> self.stats_file,'{0}'.format(self.ess_ratio)
+		print >> self.lib_file,'ESIZE {0}'.format(self.ess_ratio)
 		reference_lengths = map(lambda x: int(x), self.bamfile.lengths)
 		ref_list = zip(self.bamfile.references, reference_lengths)
 		total_basepairs = sum(reference_lengths)
@@ -229,8 +229,8 @@ class LibrarySampler(object):
 		print >> self.stats_file, 'Coverage total proper mapped:', self.param.nr_proper_mapped/float(total_basepairs)
 
 		print >> self.stats_file, 'Proper reads sampled:', samples
-		#print >> self.stats_file, 'ESS of proper reads sampled:', ess
-		#print >> self.stats_file, 'ESS_ratio:', self.ess_ratio
+		print >> self.stats_file, 'ESS MCMC of proper reads sampled:', ess
+		print >> self.stats_file, 'ESS_MCMC_ratio:', self.ess_ratio
 		coverage = self.read_length*samples*2/float(total_basepairs)
 		print >> self.stats_file, 'Mean coverage proper reads:{0}'.format( coverage )
 		inner_span_coverage = coverage * (self.mean -2*self.read_length)/(2*self.read_length)

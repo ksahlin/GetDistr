@@ -49,12 +49,12 @@ def collect_libstats(args,outfolder,param):
 	param.read_length = float(read_length)
 	print param.mu, param.sigma, param.adjusted_mu, param.adjusted_sigma, param.min_isize, param.max_isize, param.read_length
 	param.max_window_size = int(param.mu) if param.mu <= 1000 else int(param.mu)/2
-	#param.ess_ratio = float(vals[4].strip().split()[0])
-	param.total_basepairs = int(vals[4].strip().split()[0])
+	param.ess_ratio = float(vals[4].strip().split()[1])
+	param.total_basepairs = int(vals[5].strip().split()[0])
 	param.pval = 0.05/ param.total_basepairs # bonferroni correction
 
 	
-	for line in vals[5:]:
+	for line in vals[6:]:
 		ref,length = line.strip().split('\t')
 		length = int(length)
 		param.scaf_lengths[ref] = length

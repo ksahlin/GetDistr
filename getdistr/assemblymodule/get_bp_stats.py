@@ -7,6 +7,7 @@ import sys
 import os
 import pickle
 from collections import defaultdict
+import re
 
 from statsmodels.distributions.empirical_distribution import ECDF
 from getdistr.assemblymodule import find_normal_parameters as fit
@@ -378,9 +379,6 @@ def parse_bam(bam_file,param):
 		print >>  stats_file, 'True lower 0.025 quantile distance from mean:{0}'.format(true_mean - scanner.ecdf.means[lower_index])
 		print >>  stats_file, 'True upper  0.025 quantile distance from mean:{0}'.format(scanner.ecdf.means[upper_index] - true_mean)
 
-		scanner.ecdf.make_ECDF()
-		scanner.ecdf.get_quantiles()
-		pickle.dump(scanner.ecdf, open(os.path.join(param.outfolder,'ecdf.pkl'),'w') )
 	outfile.close()
 
 	if param.plots:
@@ -388,32 +386,86 @@ def parse_bam(bam_file,param):
 		plot_bp_specific_distr(infile, param)
 
 
-	emp_sum = 0 
-	the_sum = 0
-	tot_obs_count = 0
-	print sample_dict
+	# calculate theoretical variance using library variance sigma and the number of
+	# spamming mate pairs over every 1.5*mu:th position with the formula:
+	# Var(\hat{mu}) = \sum_{i=1}^m \frac{\sigma}{n_i}p(n_i)
+	# Where p(n_i) = count(n_i)/m.
+	m = float(sum(map(lambda n: len(sample_dict[n]), sample_dict)))
+	theoretical_mu_hat_var = 0
+	print 'm', m
 	for n in sample_dict:
-		obs_count = float(len(sample_dict[n]))
-		if  obs_count < 2:
-			continue
+		#print 'n:', n, 'obs:',sample_dict[n]
+		count = float(len(sample_dict[n]))
+		p_n = count/m
+		#print 'p_n', p_n
+		theoretical_mu_hat_var += p_n* (param.sigma)**2/n
 
-		emperical_avg_est = sum(sample_dict[n])/obs_count
-		theoretical_se = param.sigma/math.sqrt(n)
+	# print sample_dict
 		
-		print 'N:',n
-		print 'THE:',theoretical_se
-		emperical_standard_error =  (sum(list(map((lambda x: x ** 2 - 2 * x * emperical_avg_est + emperical_avg_est ** 2), sample_dict[n]))) / (obs_count - 1)) ** 0.5
-		if emperical_standard_error > 0:
-			print 'EMP:',emperical_standard_error
-			print sample_dict[n]
-			tot_obs_count += obs_count
-			emp_sum += emperical_standard_error * obs_count 
-			the_sum += theoretical_se * obs_count
+	n_obs_mean  = float(len(scanner.ecdf.means))
+	avg_obs_mean = sum(scanner.ecdf.means)/ n_obs_mean
+	observed_mu_hat_var = sum(list(map((lambda x: x ** 2 - 2 * x * avg_obs_mean + avg_obs_mean ** 2), scanner.ecdf.means))) / (n_obs_mean - 1)
 
-	param.ess_ratio =  min(the_sum /emp_sum,1) 
+	D_eff = observed_mu_hat_var/theoretical_mu_hat_var
+	print "observed:", observed_mu_hat_var
+	print "theoretical:", theoretical_mu_hat_var
+	print "D_eff:", D_eff
+	param.ess_ratio = min(1/ D_eff, 1)
+	print 'ESS_ratio:',param.ess_ratio
+
+	# emp_sum = 0 
+	# the_sum = 0
+	# tot_obs_count = 0
+
+	# #print sample_dict
+
+	# for n in sample_dict:
+	# 	obs_count = float(len(sample_dict[n]))
+	# 	if  obs_count < 2:
+	# 		continue
+
+	# 	emperical_avg_est = sum(sample_dict[n])/obs_count
+	# 	theoretical_se = param.sigma/math.sqrt(n)
+		
+	# 	print 'N:',n
+	# 	print 'THE:',theoretical_se
+	# 	emperical_standard_error =  (sum(list(map((lambda x: x ** 2 - 2 * x * emperical_avg_est + emperical_avg_est ** 2), sample_dict[n]))) / (obs_count - 1)) ** 0.5
+	# 	if emperical_standard_error > 0:
+	# 		print 'EMP:',emperical_standard_error
+	# 		print sample_dict[n]
+	# 		tot_obs_count += obs_count
+	# 		emp_sum += emperical_standard_error * obs_count 
+	# 		the_sum += theoretical_se * obs_count
+	# param.ess_ratio =  min(the_sum /emp_sum,1) 
+
 	stats_file = open(os.path.join(param.outfolder,'stats.txt'), 'a')
-	print >> stats_file, 'ESS_ratio:', param.ess_ratio
+	print >> stats_file, 'ESS_sample_var_ratio:', param.ess_ratio
 	stats_file.close()
 
+	lib_file = open(os.path.join(param.outfolder,'library_info.txt'),'r+')
+	old_lib_file = lib_file.readlines()
+	new_lib_file = []
 
+	for line in old_lib_file:
+		print 'LINE:', line
+		if re.match('ESIZE', line):
+			print 'OK'
+			new_lib_file.append("ESIZE {0}\n".format(param.ess_ratio))
+		else:
+			print 'YES'
+			new_lib_file.append(line)
+
+	# print 
+	# print
+	# print "".join(old_lib_file)
+	lib_file.seek(0)
+	lib_file.write("".join(new_lib_file))
+	# print 'LOOOOOL'
+	# print
+	# print new_lib_file
+	#print >> lib_file, 'ESS_sample_var_ratio:', param.ess_ratio
+
+	scanner.ecdf.make_ECDF()
+	scanner.ecdf.get_quantiles()
+	pickle.dump(scanner.ecdf, open(os.path.join(param.outfolder,'ecdf.pkl'),'w') )
 

@@ -269,7 +269,7 @@ def main(bp_file_path, gap_file_path, param):
 	current_seq = -1
 	sv_container = BreakPointContainer(param)
 
-
+	print 'ESS_ratio used in plots:',param.ess_ratio
 	
 	for i, line in enumerate(open(bp_file_path,'r')):
 		scf, pos, n_obs, mean, stddev = line.strip().split()
