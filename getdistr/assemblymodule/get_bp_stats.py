@@ -406,6 +406,8 @@ def parse_bam(bam_file,param):
 	avg_obs_mean = sum(scanner.ecdf.means)/ n_obs_mean
 	observed_mu_hat_var = sum(list(map((lambda x: x ** 2 - 2 * x * avg_obs_mean + avg_obs_mean ** 2), scanner.ecdf.means))) / (n_obs_mean - 1)
 
+	print 'obs mean:', avg_obs_mean
+	print 
 	D_eff = observed_mu_hat_var/theoretical_mu_hat_var
 	print "observed:", observed_mu_hat_var
 	print "theoretical:", theoretical_mu_hat_var
@@ -442,24 +444,24 @@ def parse_bam(bam_file,param):
 	print >> stats_file, 'ESS_sample_var_ratio:', param.ess_ratio
 	stats_file.close()
 
-	lib_file = open(os.path.join(param.outfolder,'library_info.txt'),'r+')
-	old_lib_file = lib_file.readlines()
-	new_lib_file = []
+	# lib_file = open(os.path.join(param.outfolder,'library_info.txt'),'r+')
+	# old_lib_file = lib_file.readlines()
+	# new_lib_file = []
 
-	for line in old_lib_file:
-		print 'LINE:', line
-		if re.match('ESIZE', line):
-			print 'OK'
-			new_lib_file.append("ESIZE {0}\n".format(param.ess_ratio))
-		else:
-			print 'YES'
-			new_lib_file.append(line)
+	# for line in old_lib_file:
+	# 	print 'LINE:', line
+	# 	if re.match('ESS', line):
+	# 		print 'OK'
+	# 		new_lib_file.append("ESS {0}\n".format(param.ess_ratio))
+	# 	else:
+	# 		print 'YES'
+	# 		new_lib_file.append(line)
 
 	# print 
 	# print
 	# print "".join(old_lib_file)
-	lib_file.seek(0)
-	lib_file.write("".join(new_lib_file))
+	# lib_file.seek(0)
+	# lib_file.write("".join(new_lib_file))
 	# print 'LOOOOOL'
 	# print
 	# print new_lib_file

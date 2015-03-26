@@ -277,7 +277,7 @@ if __name__ == '__main__':
 	filter_parser_within.add_argument('outfolder', type=str, help='Outfolder. ')
 	filter_parser_within.add_argument('--n', dest='n', type=int, default=1, help='Neighborhood size. ')	
 	filter_parser_within.add_argument('--lib_min', dest='lib_min', type=int, default=200, help='Minimum insert size (if in doubt, just set lib_min = 2*read_length). ')	
-	filter_parser_within.add_argument('--lib_max', dest='lib_max', type=int, default=200000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
+	filter_parser_within.add_argument('--lib_max', dest='lib_max', type=int, default=20000, help='Maximum insert size (tight bound is not necessary, choose a larger value rather than smaller). ')	
 	filter_parser_within.add_argument('--plots', dest="plots", action='store_true', help='Plot pval distribution.')
 	filter_parser_within.set_defaults(which='filter_within')
 

@@ -45,6 +45,9 @@ def plot_isize(isizes,outfile):
 
 def AdjustInsertsizeDist(mean_insert, std_dev_insert, insert_list):
     k = MaxObsDistr(len(insert_list), 0.95)
+    # for ins in insert_list:
+    # 	if (ins > mean_insert + k * std_dev_insert or ins < mean_insert - k * std_dev_insert):
+    # 		print ins
     filtered_list = list(filter((lambda x : (x < mean_insert + k * std_dev_insert and x > mean_insert - k * std_dev_insert)), insert_list))
     if len(insert_list) > len(filtered_list):
         return(True, filtered_list)
@@ -124,7 +127,7 @@ class LibrarySampler(object):
 		# max_tlen = 0
 		#bam_filtered = ifilter(lambda r: is_proper_aligned_unique_innie(r), self.bamfile)
 		isize_list = []
-
+		mcmc_dict = {}
 		#nr_reads = 0
 		#nr_mapped = 0
 		# nr_proper_mapped = 0
@@ -135,6 +138,10 @@ class LibrarySampler(object):
 				assert read.tlen > 0
 				read_lengths.append(read.rlen)	
 				isize_list.append(read.tlen)
+				if read.tid in mcmc_dict:
+					mcmc_dict[read.tid].append(read.tlen)
+				else:
+					mcmc_dict[read.tid] = [read.tlen]
 				# if abs(read.tlen) > max_tlen:
 				# 	max_tlen = abs(read.tlen)
 			if sample_nr >= SAMPLE_SIZE:
@@ -175,8 +182,9 @@ class LibrarySampler(object):
 		# 	if sample_nr > SAMPLE_SIZE:
 		# 		break
 		print >> self.lib_file, '#Insert size sample size:', sample_nr
-		
+
 		isize_list = filter(lambda x: 0 < x - 2*self.read_length,isize_list)
+
 		n_isize = float(len(isize_list))
 		mean_isize = sum(isize_list)/n_isize
 		std_dev_isize =  (sum(list(map((lambda x: x ** 2 - 2 * x * mean_isize + mean_isize ** 2), isize_list))) / (n_isize - 1)) ** 0.5
@@ -184,13 +192,21 @@ class LibrarySampler(object):
 		print >> self.lib_file,'#Stddev before filtering: ', std_dev_isize
 		extreme_obs_occur = True
 		while extreme_obs_occur:
+			#print 'HERE!!'
 			extreme_obs_occur, filtered_list = AdjustInsertsizeDist(mean_isize, std_dev_isize, isize_list)
 			n_isize = float(len(filtered_list))
 			mean_isize = sum(filtered_list) / n_isize
 			std_dev_isize = (sum(list(map((lambda x: x ** 2 - 2 * x * mean_isize + mean_isize ** 2), filtered_list))) / (n_isize - 1)) ** 0.5
 			isize_list = filtered_list
 
+
 		self.min_isize, self.max_isize = min(isize_list), max(isize_list) 
+
+		# filter outliers
+		for ref in mcmc_dict.keys():
+			ref_isizes = mcmc_dict[ref]
+			mcmc_dict[ref] = list(filter(lambda x: self.min_isize <= x <= self.max_isize, ref_isizes))
+
 		print >> self.lib_file,'#Mean converged:', mean_isize
 		print >> self.lib_file,'#Std_est converged: ', std_dev_isize
 		print >> self.lib_file,'{0}\t{1}'.format( mean_isize, std_dev_isize)
@@ -207,9 +223,9 @@ class LibrarySampler(object):
 		print >> self.lib_file,'{0}\t{1}'.format(self.adjusted_mean, self.adjusted_stddev)
 
 		samples = min(SAMPLE_SIZE,len(isize_list))
-		ess = self.effectiveSampleSize(isize_list[:samples])
-		self.ess_ratio = ess / float(samples)
-		print >> self.lib_file,'ESIZE {0}'.format(self.ess_ratio)
+		ess = self.effectiveSampleSize(mcmc_dict) #isize_list[:samples]) # mcmc_dict ) #
+		self.ess_ratio = ess / float(sum(map(lambda x: len(mcmc_dict[x]), mcmc_dict)))
+		print >> self.lib_file,'ESS {0}'.format(self.ess_ratio)
 		reference_lengths = map(lambda x: int(x), self.bamfile.lengths)
 		ref_list = zip(self.bamfile.references, reference_lengths)
 		total_basepairs = sum(reference_lengths)
@@ -218,15 +234,15 @@ class LibrarySampler(object):
 		for ref, length in ref_list:
 			print >> self.lib_file,'{0}\t{1}'.format(ref, length)
 
-
-		print >> self.stats_file, 'Total number of reads:', self.param.nr_reads
-		print >> self.stats_file, 'Total number of mapped reads:', self.param.nr_mapped
-		print >> self.stats_file, 'Total number of properly mapped reads:', self.param.nr_proper_mapped
-		print >> self.stats_file, 'Percentage of reads mapped:', self.param.nr_mapped/float(self.param.nr_reads)
-		print >> self.stats_file, 'Percentage of proper read pairs mapped:', self.param.nr_proper_mapped/float(self.param.nr_reads)
-		print >> self.stats_file, 'Coverage total reads:', self.param.nr_reads/float(total_basepairs)
-		print >> self.stats_file, 'Coverage total mapped:', self.param.nr_mapped/float(total_basepairs)
-		print >> self.stats_file, 'Coverage total proper mapped:', self.param.nr_proper_mapped/float(total_basepairs)
+		if self.param.nr_reads:
+			print >> self.stats_file, 'Total number of reads:', self.param.nr_reads
+			print >> self.stats_file, 'Total number of mapped reads:', self.param.nr_mapped
+			print >> self.stats_file, 'Total number of properly mapped reads:', self.param.nr_proper_mapped
+			print >> self.stats_file, 'Percentage of reads mapped:', self.param.nr_mapped/float(self.param.nr_reads)
+			print >> self.stats_file, 'Percentage of proper read pairs mapped:', self.param.nr_proper_mapped/float(self.param.nr_reads)
+			print >> self.stats_file, 'Coverage total reads:', self.param.nr_reads/float(total_basepairs)
+			print >> self.stats_file, 'Coverage total mapped:', self.param.nr_mapped/float(total_basepairs)
+			print >> self.stats_file, 'Coverage total proper mapped:', self.param.nr_proper_mapped/float(total_basepairs)
 
 		print >> self.stats_file, 'Proper reads sampled:', samples
 		print >> self.stats_file, 'ESS MCMC of proper reads sampled:', ess
@@ -283,10 +299,47 @@ class LibrarySampler(object):
 		"""
 		robjects.packages.importr("coda")
 		r = robjects.r
+
+		ess_dict = {}
+		for ref in data.keys():
+			if len(data[ref]) < 100:
+				continue
+			array_data = numpy.array(data[ref])
+			normalizedData = array_data - array_data.mean()
+			# print array_data.mean()
+			# print array_data
+			rData = robjects.IntVector(normalizedData)
+			mcmc_r = r.mcmc(rData)	
+			# print  mcmc_r
+			# print r.effectiveSize(mcmc_r)
+			# print list(r.effectiveSize(mcmc_r))
+			ess_dict[ref] = list(r.effectiveSize(mcmc_r))[0] 
+		
+		# print ess_dict
+		# print sum(map(lambda x: ess_dict[x], ess_dict))
+		# print sum(map(lambda x: len(data[x]), data))
+		# # sum_ess = 0
+		# # for ref in data:
+		# # 	nr_samples = len(data[ref])
+		# # 	sum_ess += nr_samples * ess_dict[ref] sum(ess_vector)
+		ess = sum(map(lambda x: ess_dict[x], ess_dict))
+
+		# tot_samples = data #[item for sublist in data.values() for item in sublist]
+		# array_data_tot = numpy.array( tot_samples )
+		# normalizedData = array_data_tot - array_data_tot.mean()
+		# print array_data_tot.mean()
+		# rData = robjects.IntVector(normalizedData)
+		# mcmc_r = r.mcmc(rData)	 
+		# ess_tot = list(r.effectiveSize(mcmc_r))[0] 
+		# print 'Global:', ess_tot
+
+
+		return ess
+
 		# number_of_samples = len(data)
 		# max_batches = number_of_samples / 10000
 		# ess_list = []
-		# for nr_batches in range(1, max_batches+1):
+		# for nr_batches in [1, max_batches]: #range(1, max_batches+1):
 		# 	chunk_size = number_of_samples / nr_batches
 		# 	print chunk_size
 		# 	ess_list.append([]) 
@@ -307,11 +360,11 @@ class LibrarySampler(object):
 		# avg_ess = sum_ess / len(ess_list)
 		# return avg_ess
 		
-		array_data = numpy.array(data)
-		normalizedData = array_data - array_data.mean()
-		rData = robjects.IntVector(normalizedData)
-		mcmc_r = r.mcmc(rData)	 
-		return list(r.effectiveSize(mcmc_r))[0]
+		# array_data = numpy.array(data)
+		# normalizedData = array_data - array_data.mean()
+		# rData = robjects.IntVector(normalizedData)
+		# mcmc_r = r.mcmc(rData)	 
+		# return list(r.effectiveSize(mcmc_r))[0]
 
 def chunks(l, n):
     """ Yield successive n-sized chunks from l.
