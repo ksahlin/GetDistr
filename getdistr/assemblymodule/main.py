@@ -6,7 +6,7 @@ from getdistr.assemblymodule import get_bp_stats
 from getdistr.assemblymodule import get_gap_coordinates
 from getdistr.assemblymodule import filter_bam
 from getdistr.assemblymodule import cluster_p_vals
-from getdistr.assemblymodule import sample_ess_correction
+# from getdistr.assemblymodule import sample_ess_correction
 
 import os,sys
 
