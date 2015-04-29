@@ -1,4 +1,3 @@
-
 from itertools import ifilter
 import math
 import lib_est
@@ -8,6 +7,7 @@ import os
 import pickle
 from collections import defaultdict
 import re
+import json
 
 from statsmodels.distributions.empirical_distribution import ECDF
 from getdistr.assemblymodule import find_normal_parameters as fit
@@ -149,7 +149,7 @@ class Scanner(object):
 		self.ecdf = ECDF_hist()
 
 	def write_bp_stats_to_file(self,bp_index):
-		#print  '{0}\t{1}\t{2}\t{3}\t{4}'.format(self.ref_name, bp_index, self.n_obs, self.mu, self.var)
+		#print	'{0}\t{1}\t{2}\t{3}\t{4}'.format(self.ref_name, bp_index, self.n_obs, self.mu, self.var)
 		try:
 			math.sqrt(self.var)
 		except ValueError:
@@ -190,7 +190,7 @@ class Scanner(object):
 					self.ecdf.means.append(self.mu)
 					sample_dict[self.n_obs].append(self.mu)
 			# if self.n_obs > 1 and self.position % int(lib_mu) == 0:
-			# 	sample_dict[self.n_obs].append(self.mu)
+			#	sample_dict[self.n_obs].append(self.mu)
 		self.position = pos
 
 def read_pair_generator(bam,param):
@@ -355,7 +355,7 @@ def parse_bam(bam_file,param):
 					print 'Read coordinates outside scaffold length for {0}:'.format(current_scaf), read.aend, read.aend, read.mpos +read.rlen, read.pos 
 					#continue
 				# if read.tlen <0 :
-				# 	print 'BUG', read.tlen
+				#	print 'BUG', read.tlen
 
 				if (read.pos,mpos) in already_sampled:
 					duplicates.add((read.qname,read.pos,mpos))
@@ -368,16 +368,20 @@ def parse_bam(bam_file,param):
 		print 'Good read pair count: ', counter
 
 		# calculate upper and lower true margin of error
-		stats_file = open(os.path.join(param.outfolder,'stats.txt'), 'a')
+		stats_file = open(os.path.join(param.outfolder,'stats.txt'), 'r+')
+		params = json.load(stats_file)
 		scanner.ecdf.means.sort()
 		total_pos = len(scanner.ecdf.means)
 		lower_index = int(total_pos*0.025)
 		upper_index = int(total_pos*0.975)
 		true_mean = scanner.ecdf.means[int(total_pos*0.5)]
 
-		print >>  stats_file, 'True average observed insert size length:{0}'.format(true_mean)
-		print >>  stats_file, 'True lower 0.025 quantile distance from mean:{0}'.format(true_mean - scanner.ecdf.means[lower_index])
-		print >>  stats_file, 'True upper  0.025 quantile distance from mean:{0}'.format(scanner.ecdf.means[upper_index] - true_mean)
+		params["true-mean"] = true_mean
+		params["true-lower"] = true_mean - scanner.ecdf.means[lower_index]
+		params["true-upper"] = scanner.ecdf.means[upper_index] - true_mean
+		stats_file.seek(0)
+		json.dump(params, stats_file, sort_keys=True, indent=4, separators=(',', ': '))
+		stats_file.truncate()
 
 	outfile.close()
 
@@ -402,7 +406,7 @@ def parse_bam(bam_file,param):
 
 	# print sample_dict
 		
-	n_obs_mean  = float(len(scanner.ecdf.means))
+	n_obs_mean	= float(len(scanner.ecdf.means))
 	avg_obs_mean = sum(scanner.ecdf.means)/ n_obs_mean
 	observed_mu_hat_var = sum(list(map((lambda x: x ** 2 - 2 * x * avg_obs_mean + avg_obs_mean ** 2), scanner.ecdf.means))) / (n_obs_mean - 1)
 
@@ -416,23 +420,21 @@ def parse_bam(bam_file,param):
 	print 'ESS_ratio:',param.ess_ratio
 
 
-	stats_file = open(os.path.join(param.outfolder,'stats.txt'), 'a')
-	print >> stats_file, 'ESS_sample_var_ratio:', param.ess_ratio
+	stats_file = open(os.path.join(param.outfolder,'stats.txt'), 'r+')
+	params = json.load(stats_file)
+	params[ "extra-info" ][ "ess_sample_var_ratio" ] = param.ess_ratio
+	stats_file.seek(0)
+	json.dump(params, stats_file, sort_keys=True, indent=4, separators=(',', ': '))
+	stats_file.truncate()
 	stats_file.close()
 
 	lib_file = open(os.path.join(param.outfolder,'library_info.txt'),'r+')
-	old_lib_file = lib_file.readlines()
-	new_lib_file = []
-
-	for line in old_lib_file:
-		if re.match('ESS', line):
-			new_lib_file.append("ESS {0}\n".format(param.ess_ratio))
-		else:
-			new_lib_file.append(line)
-
+	params = json.load(lib_file)
+	params["ess"] = param.ess_ratio
 	lib_file.seek(0)
-	lib_file.write("".join(new_lib_file))
-	#print >> lib_file, 'ESS_sample_var_ratio:', param.ess_ratio
+	json.dump(params, lib_file, sort_keys=True, indent=4, separators=(',', ': '))
+	lib_file.truncate()
+	lib_file.close()
 
 	scanner.ecdf.make_ECDF()
 	scanner.ecdf.get_quantiles()
