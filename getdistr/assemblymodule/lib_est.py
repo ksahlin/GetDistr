@@ -238,8 +238,8 @@ class LibrarySampler(object):
 
 		info = dict()
 		info["proper-samples"] = samples
-		info["ess-proper-samples"] = ess
-		info["ess-ratio"] = self.ess_ratio
+		info["ess-proper-samples"] = 1 #ess
+		info["ess-ratio"] = 1 #self.ess_ratio
 		coverage = self.read_length*samples*2/float(total_basepairs)
 		info["mean-coverage-proper"] = coverage
 		inner_span_coverage = coverage * (self.mean -2*self.read_length)/(2*self.read_length)
