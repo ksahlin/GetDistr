@@ -2,6 +2,7 @@ import argparse
 from scipy.stats.distributions import norm
 #import math
 import numpy as np
+import pysam
 from scipy.optimize import fmin
 
 try:
@@ -13,6 +14,34 @@ try:
 	sns.set_palette("husl", desat=.6)
 except ImportError:
 	pass
+
+
+def is_proper_aligned_unique_innie(read):
+    mapped_ok = not (read.is_unmapped or read.mate_is_unmapped)
+    orientation_ok = (read.is_reverse and not read.mate_is_reverse and read.tlen < 0) or \
+            (not read.is_reverse and read.mate_is_reverse and read.tlen > 0)
+    quality_ok = read.mapq > 10 and not read.is_secondary
+    same_ref = read.rname == read.mrnm
+
+    return mapped_ok and orientation_ok and quality_ok and same_ref
+
+def is_proper_aligned_unique_outie(read):
+    mapped_ok = not (read.is_unmapped or read.mate_is_unmapped)
+    orientation_ok = (read.is_reverse and not read.mate_is_reverse and read.tlen > 0) or \
+            (not read.is_reverse and read.mate_is_reverse and read.tlen < 0)
+    quality_ok = read.mapq > 10 and not read.is_secondary
+    same_ref = read.rname == read.mrnm
+
+    return mapped_ok and orientation_ok and quality_ok and same_ref
+
+def ff_or_rr(read):
+    mapped_ok = not (read.is_unmapped or read.mate_is_unmapped)
+    orientation_ok = (read.is_reverse and read.mate_is_reverse) or \
+            (read.is_reverse and read.mate_is_reverse)
+    quality_ok = read.mapq > 10 and not read.is_secondary
+    same_ref = read.rname == read.mrnm
+
+    return mapped_ok and orientation_ok and quality_ok and same_ref
 
 def estimate_params_for_normal(x, low_bound , mu_initial, sigma_initial):
 	"""
@@ -64,7 +93,27 @@ def estimate_params_for_normal(x, low_bound , mu_initial, sigma_initial):
 
 
 
-def main(x,outfile,bam_file = False, bp_file=False):
+def main(x, outfile, bam_file=False, bp_file=False):
+	if not x:
+		if bam_file:
+		    bamfile_ = pysam.Samfile(bam_file, 'rb')
+		    i_sizes_fr = []
+		    i_sizes_rf = []
+		    i_sizes_ff = []
+		    for read in bamfile_:
+		        if abs(read.tlen) < 0 or abs(read.tlen) > 10000:
+		            continue
+		        if is_proper_aligned_unique_outie(read):
+		            i_sizes_rf.append(abs(read.tlen))
+		        if is_proper_aligned_unique_innie(read):
+		            i_sizes_fr.append(abs(read.tlen))
+		        if ff_or_rr(read):
+		            i_sizes_ff.append(abs(read.tlen))
+
+		    x = i_sizes_rf #matepairs
+		elif bp_file:
+			pass
+
 	n = float(len(x))
 	mu = sum(x)/n
 	sigma = (sum(list(map((lambda t: t ** 2 - 2 * t * mu + mu ** 2), x))) / (n - 1)) ** 0.5
@@ -95,5 +144,5 @@ if __name__ == '__main__':
 	is_bam = args.bamfile
 	is_bp = args.bp_file
 
-	main(args.outfile, bam_file=is_bam, bp_file=is_bp)
+	main([], args.outfile, bam_file=is_bam, bp_file=is_bp)
 
