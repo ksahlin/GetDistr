@@ -8,8 +8,8 @@ import json
 import pysam
 import numpy
 from statsmodels.distributions.empirical_distribution import ECDF
-from rpy2 import robjects
-from rpy2.robjects import packages
+# from rpy2 import robjects
+# from rpy2.robjects import packages
 
 #import assemblymodule.filter_bam as fb
 from getdistr.assemblymodule import find_normal_parameters as fit
@@ -209,9 +209,9 @@ class LibrarySampler(object):
 		params["sd-adjusted"] = self.adjusted_stddev
 
 		samples = min(SAMPLE_SIZE,len(isize_list))
-		ess = self.effectiveSampleSize(mcmc_dict) #isize_list[:samples]) # mcmc_dict ) #
-		self.ess_ratio = ess / float(sum(map(lambda x: len(mcmc_dict[x]), mcmc_dict)))
-		params["ess"] = self.ess_ratio
+		# ess = self.effectiveSampleSize(mcmc_dict) #isize_list[:samples]) # mcmc_dict ) #
+		# self.ess_ratio = ess / float(sum(map(lambda x: len(mcmc_dict[x]), mcmc_dict)))
+		params["ess"] = 1 #self.ess_ratio
 		reference_lengths = map(lambda x: int(x), self.bamfile.lengths)
 		ref_list = zip(self.bamfile.references, reference_lengths)
 		total_basepairs = sum(reference_lengths)
