@@ -24,7 +24,7 @@ def plot2(x_y_ins_true, x_y_ins_false, x_y_del_true, x_y_del_false):
 	#line_up, = plt.plot([1,2,3], label='Line 2')
 	#line_down, = plt.plot([3,2,1], label='Line 1')
 	fig, ax = plt.subplots()
-	fig.suptitle('$H_0^{gd}$, $\mu=300$')
+	fig.suptitle("$H'_0$, $\mu=300$")
 	plt.xlabel('indel size')
 	plt.ylabel('# detected')
 	sd_del_true, x_del_true, y_del_true, fp_del  = zip(*x_y_del_true)	
@@ -51,13 +51,14 @@ def plot2(x_y_ins_true, x_y_ins_false, x_y_del_true, x_y_del_false):
 	plt.fill_between(x_del_true[:6], y_del_true[6:12], y_ins_true[6:12], color='r', alpha='0.3')
 	plt.fill_between(x_del_true[:6], y_del_true[12:], y_ins_true[12:], color='g', alpha='0.3')
 	#plt.show()
-	plt.savefig('/Users/ksahlin/Dropbox/GetDist/paper-Asmblthn-contest/figures/Clever_true_300.pdf', format='pdf')
+	ax.set_rasterized(True)
+	plt.savefig('/Users/ksahlin/Documents/workspace/getdistr_paper/data/detection_clever/plots/Clever_true_300.eps', format='eps')
 
 	fig, ax = plt.subplots()
 	fig.suptitle('$H_0$, $\mu=300$')
 	plt.xlabel('indel size')
 	plt.ylabel('# detected')	
-	sd_del_true, x_del_false, y_del_false, fp_del  = zip(*x_y_del_false)	
+	sd_del_true, x_del_false, y_del_false, fp_del  = zip(*x_y_del_false)
 	sd_ins_true, x_ins_false, y_ins_false, fp_ins  = zip(*x_y_ins_false)
 	tot_fps = map(add, fp_del,fp_ins)
 	tot_fps = map(lambda x: -x, tot_fps)
@@ -78,8 +79,9 @@ def plot2(x_y_ins_true, x_y_ins_false, x_y_del_true, x_y_del_false):
 	plt.fill_between(x_del_false[:6], y_del_false[12:], y_ins_false[12:], color='g', alpha='0.3')
 
 	#plt.show()
-	plt.savefig('/Users/ksahlin/Dropbox/GetDist/paper-Asmblthn-contest/figures/Clever_false_300.pdf', format='pdf')
-
+	ax.set_rasterized(True)
+	plt.savefig('/Users/ksahlin/Documents/workspace/getdistr_paper/data/detection_clever/plots/Clever_false_300.eps', format='eps')
+	print 'ENDING'
 
 def plot(ins_false,ins_true,del_false,del_true):
 	n_bins = 20
@@ -89,6 +91,8 @@ def plot(ins_false,ins_true,del_false,del_true):
 	# dele =  [70]*30 + [50]*55 + [24]*99
 	fig, axes = plt.subplots(nrows=2, ncols=3)
 	ax0, ax1, ax2,ax3, ax4, ax5 = axes.flat
+
+	print 'HEY'
 
 	i = 0
 	for sd in (25,50,75):
@@ -114,7 +118,6 @@ def plot(ins_false,ins_true,del_false,del_true):
 	# 		print 'loooool'
 
 	#print data
-
 
 		colors = ['black', 'grey']
 		#axes.flat[i].set_ylim(0.1,100)
@@ -143,7 +146,6 @@ def plot(ins_false,ins_true,del_false,del_true):
 
 	#print data
 
-
 		colors = ['black', 'grey']
 		#axes.flat[i].set_ylim(0.1,100)
 		axes.flat[i].hist(data, n_bins, histtype='bar', color=colors, label=colors, range=(0,100),  bottom=0.01)
@@ -156,7 +158,7 @@ def plot(ins_false,ins_true,del_false,del_true):
 	#ax0.legend(prop={'size': 10})
 	#ax0.set_title('bars with legend')
 	plt.show()
-	#plt.savefig('/Users/ksahlin/Dropbox/GetDist/paper-v3/GD_results_for_ms/indel_sd3_500/insertion/figure', format='eps')
+	#plt.savefig('/Users/ksahlin/Dropbox/GetDist/paper-v3/GD_results_for_ms/indel_sd3_300/insertion/figure', format='eps')
 
 def parse_results(file_):
 	false_hyp_tp = {25:[],50:[],75:[]}
