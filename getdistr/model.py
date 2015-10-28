@@ -258,6 +258,14 @@ class NormalModel(object):
         z_lower=-3 * int(self.sigma)
         z_u = int((z_upper+z_lower)/2.0 + precision)
         z_l = int((z_upper+z_lower)/2.0)
+
+        n_obs = len(list_of_obs)
+
+        if type(list_of_obs[0]) == int:
+            list_of_obs = zip(list_of_obs,[0]*n_obs, [0]*n_obs)
+        else:
+            pass
+
         while z_upper-z_lower>precision:
             
             likelihood_of_z_u = self.get_likelihood_value(z_u, list_of_obs, a, b, coverage,n , coverage_model)
@@ -314,6 +322,7 @@ class NormalModel(object):
             @ argument coverage_model:  The assumed coverage distribution around the mean. Valid strings are 'Uniform',
                                         'NegBin' or 'Poisson'.
         '''
+
         list_of_obs = map(lambda x : x[0], list_of_alignmet_tuples)
 
         if coverage:
