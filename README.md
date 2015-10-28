@@ -68,7 +68,7 @@ For instance, the whole pipline could be run to create various library statistic
 
 #### model.py 
 
-The code in this module can be copy pasted to other code, impoted or run interactivily. Example:
+model.py is located in getdistr/module.py. It is the theory presented in the preprint [GetDistr](http://biorxiv.org/content/biorxiv/early/2015/08/04/023929.full.pdf) put into code. The code in this module can be copy pasted to other code, imported or run interactivily. Example:
 
 	$ python
 	>>>import model
