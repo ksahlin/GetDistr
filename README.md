@@ -1,18 +1,18 @@
 GetDistr
 ========
 
-This is a reference implementation of the theory presented in a preprint version on bioRxiv [GetDistr](http://biorxiv.org/content/biorxiv/early/2015/08/04/023929.full.pdf) and a hevily modified preprint submitted to RECOMB 2016. This implementation contains various scripts that we used for plotting of data and inference and testing. 
+This is a reference implementation of the theory presented in a preprint version on bioRxiv [GetDistr](http://biorxiv.org/content/biorxiv/early/2015/08/04/023929.full.pdf) and a heavily modified preprint submitted to RECOMB 2016. This implementation contains various scripts that we used for plotting of data and inference and testing. 
 
 
 ### What this repository offers
-The data considered here is paired reads (paired end reads, mate pair reads, fosmid/BAC ends) --- any read pair that has and "insert size", that is, an unknown distance between the reads. 
+The data considered here is paired reads (paired end reads, mate pair reads, fosmid/BAC ends) --- any read pair that has and "insert size", that is, an unknown distance between the reads. This repository can for example:
 
 
-* Calculates MLE gaps between contigs given a set of observations in module (getdistr/model.py). This is an extended version of [GapEst](http://www.ncbi.nlm.nih.gov/pubmed/22923455) to also calculate better estimates for libraries that better fit a logNormal distribution (more general) rather than normal.
+* Calculates MLE gaps between contigs given a set of observations in module (getdistr/model.py). This is an extended version of [GapEst](http://www.ncbi.nlm.nih.gov/pubmed/22923455) to also calculate better estimates for libraries that better fit a logNormal distribution (more general)  than normal.
 
 * Calculates an estimate of the true full library distribution given a sorted bam file of aligned reads to contigs. That is, for a read pair library aligned on a "fragmented" assembly (small contigs compared to library insert size), smaller insert size reads are more frequently observed than larger ones when looking at reads with both mates mapping within a contig. This biases the estimation of the full library. There is a way to model this (presented in [GetDistr](http://biorxiv.org/content/biorxiv/early/2015/08/04/023929.full.pdf) ) this module helps to infer the correct library distribution.
 
-* Calculates the observed fragment length distribution over a position or region on a genome for detection of indels. As a consequence, a better null-hypothesis can be formulated for toosl such as [CLEVER](http://bioinformatics.oxfordjournals.org/content/early/2012/10/11/bioinformatics.bts566.abstract) 
+* Calculates the observed fragment length distribution over a position or region on a genome for detection of indels. As a consequence, a better null-hypothesis can be formulated for toosl such as [CLEVER](http://bioinformatics.oxfordjournals.org/content/early/2012/10/11/bioinformatics.bts566.abstract). There is also an implementation of a light weight vairant caller using the theory we developed (See Using GetDistr).
 
 
 Using GetDistr
@@ -22,7 +22,7 @@ This repostory's main purpose is to be a reference implementation (for now, but 
 
 #### "assemblymodule"
 
-This module is already pretty mature and consists of several modules. The module will generate lots of statistics and plost from the aligned reads of a read pair library <em>read pair s are assumed to be aligned in fr orientation!</em>. Is assumes paired reads are aligned to ether a reference genome (calling variants), or an genome assembly (calling misassemblies, sort of..).
+Is really a lightweight program consisting of several modules (name change under consideration). The program will generate lots of statistics and plost from the aligned reads of a read pair library <em>read pairs are assumed to be aligned in fr orientation!</em>. The program assumes paired reads are aligned to ether a reference genome (calling variants), or an genome assembly (calling misassemblies, sort of..).
 
 	$ cd <path to GetDistr>/getdistr/assemblymodule/
 	$ python main.py -h
@@ -44,7 +44,7 @@ This module is already pretty mature and consists of several modules. The module
 	optional arguments:
 	  -h, --help            show this help message and exit
 
-For instance, the whole pipline could be run to create various library statistics, calculate p-values over every single base pair in the genome and even call varinats based on acculupation of signifivcat p-values. 
+For instance, the whole pipline could be run to create various library statistics, calculate p-values over every single base pair in the genome (or over contigs) and even call varinats based on acculupation of signifivcat p-values. 
 
 	$ python main.py pipeline -h
 	usage: main.py pipeline [-h] [--n N] [--lib_min LIB_MIN] [--lib_max LIB_MAX]
