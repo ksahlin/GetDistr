@@ -12,6 +12,7 @@ try:
 	import matplotlib.mlab as mlab
 	import seaborn as sns
 	sns.set_palette("husl", desat=.6)
+	plt.rcParams.update({'font.size': 22})
 except ImportError:
 	pass
 
