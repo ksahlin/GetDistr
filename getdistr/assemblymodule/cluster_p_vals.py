@@ -11,7 +11,7 @@ try:
 	import matplotlib.pyplot as plt
 	import seaborn as sns
 	sns.set_palette("husl", desat=.6)
-	sns.set(font_scale=3)
+	sns.set(font_scale=2)
 	plt.rcParams.update({'font.size': 22})
 except:
 	pass
