@@ -226,8 +226,8 @@ def plot_stats(outfile,values, title='',x='',y=''):
 		or CDF values
 	"""
 	plt.hist(values, bins=200)
-	plt.ylabel(x)
-	plt.xlabel(y)
+	plt.ylabel(y)
+	plt.xlabel(x)
 	title_ = title
 	plt.title(title_)
 	plt.legend( )
