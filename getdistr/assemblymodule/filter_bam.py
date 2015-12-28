@@ -11,6 +11,8 @@ try:
 	import matplotlib.pyplot as plt
 	import seaborn as sns
 	sns.set_palette("husl", desat=.6)
+	sns.set_context(font_scale=2)
+
 except ImportError:
 	pass
 
